@@ -1,40 +1,53 @@
-# Frontend Excellence Skill (Claude Code, Codex CLI, Cursor)
+# Frontend Excellence Skill (Claude Code, Codex CLI)
 
 [![npm](https://img.shields.io/npm/v/@ctxr/skill-frontend-excellence)](https://www.npmjs.com/package/@ctxr/skill-frontend-excellence)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Claude%20Code%20%7C%20Codex%20CLI-blue)](https://agentskills.io)
 
-A holistic, framework-agnostic playbook for shipping ultra-fast, accessible, search-friendly, visually distinctive web interfaces. Combines Lighthouse mastery, UI/UX patterns, design aesthetics, performance, accessibility, SEO, motion, forms, layout, and data visualization into a single skill that activates inside any harness implementing the open [Agent Skills standard](https://agentskills.io): [Claude Code](https://claude.ai/code), OpenAI Codex CLI, Cursor, and others.
+> Supports Claude Code and OpenAI Codex CLI via the open Agent Skills standard. Content-only Markdown: one entry point (`SKILL.md`) plus topical references under `references/`. No runtime, no scripts, no framework assumptions.
 
-## What This Skill Is
-
-A content-only Markdown skill: one entry point (`SKILL.md`) plus eleven topical references under `references/`. No runtime, no scripts, no framework assumptions. Every rule is expressed as a principle plus a concrete check, never as a library API, so the guidance applies to vanilla HTML/CSS/JS, React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, SvelteKit, Remix, Qwik, Lit, and Web Components alike.
+A holistic, framework-agnostic playbook for shipping ultra-fast, accessible, search-friendly, visually distinctive web interfaces. Combines Lighthouse mastery, UI/UX patterns, design aesthetics, performance, accessibility, SEO, motion, forms, layout, data visualization, and a 19-phase multi-page audit workflow with widget standardization and geometry sweeps. Every rule is expressed as a principle plus a concrete check, never as a library API, so the guidance applies to vanilla HTML/CSS/JS, React, Vue, Svelte, Astro, Solid, Next.js, Nuxt, SvelteKit, Remix, Qwik, Lit, and Web Components alike.
 
 The skill encodes a single, opinionated bar (see [North Star Targets](#north-star-targets)). Treat any failure as a blocking defect, not a polish task.
 
-## Installation
-
-### npm (global)
+## Quick Start
 
 ```bash
-npm install --global @ctxr/skill-frontend-excellence
+# Install into your project
+npx @ctxr/kit install @ctxr/skill-frontend-excellence
 ```
 
-The package ships `SKILL.md` and `references/` so any Agent Skills-compatible harness (Claude Code, Codex CLI, Cursor) can discover the skill from any project.
+Open the project in any Agent Skills-compatible harness. The skill auto-activates from its YAML frontmatter the moment a prompt touches how an interface looks, feels, moves, loads, ranks, or is interacted with. There is no slash command to invoke; the skill is content-only.
 
-### Git submodule (per-project)
+## Prerequisites
+
+- An Agent Skills-compatible harness ([Claude Code](https://claude.ai/code) CLI/IDE, or OpenAI Codex CLI)
+- A project directory where you want the skill installed. Project-scope installs land at `.agents/skills/skill-frontend-excellence/`; user-scope installs (`--user`) land at `~/.agents/skills/skill-frontend-excellence/`. Discovery-mirror symlinks at `.claude/skills/` (and `~/.codex/skills/` at user scope) are created automatically so both harnesses find the skill without extra configuration.
+
+## Installation
+
+### Manual
+
+```bash
+git clone https://github.com/ctxr-dev/skill-frontend-excellence.git /tmp/skill-frontend-excellence
+mkdir -p .agents/skills
+cp -r /tmp/skill-frontend-excellence .agents/skills/skill-frontend-excellence
+```
+
+### Git Submodule
 
 ```bash
 git submodule add https://github.com/ctxr-dev/skill-frontend-excellence.git \
-  .agents/skills/skill-frontend-excellence
+    .agents/skills/skill-frontend-excellence
 ```
 
-This pins the skill at a specific commit and updates explicitly via `git submodule update --remote`.
+Pins the skill at a specific commit; update explicitly via `git submodule update --remote`.
 
 ## Usage
 
-Agent Skills-compatible harnesses (Claude Code, Codex CLI, Cursor) surface this skill automatically based on the YAML frontmatter at the top of `SKILL.md`. The `description` field tells the host when to load it: any prompt that touches how an interface looks, feels, moves, loads, ranks, or is interacted with will trigger activation.
+Agent Skills-compatible harnesses (Claude Code, Codex CLI) surface this skill automatically based on the YAML frontmatter at the top of `SKILL.md`. The `description` field tells the host when to load it: any prompt that touches how an interface looks, feels, moves, loads, ranks, or is interacted with will trigger activation.
 
-When the skill is active, the host reads `SKILL.md` first (the entry point with the North Star Targets, priority stack, workflow, and the 30 highest-leverage rules), then loads only the topical reference under `references/` that matches the current work. There is nothing to invoke manually; open the skill folder in your harness or have it installed globally and proceed with the task.
+When the skill is active, the host reads `SKILL.md` first (the entry point with the North Star Targets, priority stack, workflow, the Multi-Page Polish Loop, and the 35 highest-leverage rules), then loads only the topical reference under `references/` that matches the current work. There is nothing to invoke manually; install the skill and proceed with the task.
 
 For the canonical entry point, read [`SKILL.md`](SKILL.md).
 
@@ -42,7 +55,7 @@ For the canonical entry point, read [`SKILL.md`](SKILL.md).
 
 | File | Use when |
 |------|---------|
-| [SKILL.md](SKILL.md) | Entry point. North Star Targets, priority stack, workflow, the 30 highest-leverage rules, self-improvement checklist. |
+| [SKILL.md](SKILL.md) | Entry point. North Star Targets, priority stack, workflow, Multi-Page Polish Loop, the 35 highest-leverage rules, self-improvement checklist. |
 | [references/lighthouse.md](references/lighthouse.md) | Running a Lighthouse audit, interpreting scores, fixing failing audits, setting up CI gates. |
 | [references/performance.md](references/performance.md) | Optimizing assets, JS execution, hydration, render strategy, network, caching, fonts, images. |
 | [references/accessibility.md](references/accessibility.md) | WCAG 2.2 AA: semantic HTML, ARIA, keyboard, focus, screen reader, contrast, dynamic type, reduced motion. |
@@ -54,6 +67,9 @@ For the canonical entry point, read [`SKILL.md`](SKILL.md).
 | [references/forms.md](references/forms.md) | Validation, error placement, autofill, autosave, success/error states, multi-step flows. |
 | [references/data-viz.md](references/data-viz.md) | Chart selection, axes, legends, color, accessibility, large datasets. |
 | [references/pre-launch.md](references/pre-launch.md) | Final verification gate before declaring a page complete. |
+| [references/audit-workflow.md](references/audit-workflow.md) | Auditing or polishing an existing multi-page site against a reference; route-by-route capture, fix, and verify procedure. |
+| [references/components.md](references/components.md) | Standardizing repeated widgets, defining component contracts, detecting drift across pages. |
+| [references/defects.md](references/defects.md) | Symptom-to-fix lookup for common visible defects and the canonical programmatic geometry sweep. |
 
 ## North Star Targets
 
