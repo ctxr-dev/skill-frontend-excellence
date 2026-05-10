@@ -79,7 +79,9 @@ Use consistent file names so before-and-after comparison is mechanical:
 - `reference_mobile.png`
 - `report.json`
 
-Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent). The script below uses only standard browser APIs and standard Node modules; adapt the route list and the output directory for the project under audit:
+Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent). The script below uses only standard browser APIs and standard Node modules; adapt the route list and the output directory for the project under audit.
+
+Before running it, install the browser-automation library the script imports (for the example below: `npm install --save-dev puppeteer`). Save the script as `capture.cjs` and invoke it with `node capture.cjs <output-dir>` (the output directory defaults to `visual-audit/`). If the project already uses Playwright or another driver, port the loop body; the screenshot file naming convention is the load-bearing part, not the driver.
 
 ```js
 const fs = require("fs");
@@ -288,7 +290,7 @@ Common visual-performance fixes that surface in audit work:
 
 ## Phase 16: Reference-Level Design Heuristics
 
-Use these tests when comparing the audited site to the reference. Each test is a yes-or-no judgment supported by the captured screenshots.
+Use these tests when comparing the audited site to the reference. Each test is a yes-or-no judgment supported by the captured screenshots. The same list lives in [design.md](design.md) "Reference Comparison Heuristics" for use outside this audit workflow; the two copies are intentionally identical so each file is self-contained for its reader's mode.
 
 1. First viewport has a clear hierarchy and does not feel accidental.
 2. The brand or product is visible immediately when relevant.
@@ -311,7 +313,7 @@ A site at reference level passes every test. A site at "fine" level fails three 
 
 ## Phase 17: Common Defects and Fixes
 
-The 17-row symptom-to-fix lookup table lives in [defects.md](defects.md). Use it whenever a defect surfaces during Phase 6 or Phase 13. Apply the standard fix at the right layer (component, page, or design token), then re-run the geometry sweep on the affected route.
+The 29-row symptom-to-fix lookup table lives in [defects.md](defects.md). Use it whenever a defect surfaces during Phase 6 or Phase 13. Apply the standard fix at the right layer (component, page, or design token), then re-run the geometry sweep on the affected route.
 
 ## Phase 18: Deliverables
 
@@ -362,14 +364,14 @@ Before final delivery, confirm every item below. This is the authoritative gate 
 - Repeated widget families have been inventoried and compared across pages.
 - Same-purpose widgets have been extracted into reusable components or partials, or normalized to one contract where extraction is not feasible.
 - Remaining variants are named, intentional, and visually consistent within their variant.
-- Every edited shared component was checked on multiple pages.
+- Every edited shared component was re-captured on every route where it appears (not just the route where the defect was noticed) and the geometry sweep passed.
 - The latest screenshots reflect the latest code.
 - Build and lint pass, or failures are clearly unrelated and reported.
 - No horizontal scroll exists on mobile.
 - No known text overflow, clipped controls, duplicate arrows, tiny touch targets, or partial clickable-card defects remain.
 - The geometry sweep returns zero issues on every audited route at both capture viewports.
 - The drift collector returns no unexplained differences for any widget family.
-- Navigation, footer, pricing, cards, forms, and interactive states are verified.
+- Navigation, footer, pricing, cards, forms, and interactive states pass Phase 13 interaction QA and Phase 14 accessibility validation.
 - Accessibility basics from Phase 14 are clean on every route.
 - Reference-Level Design Heuristics from Phase 16 pass.
 - The final checklist is written and linked.

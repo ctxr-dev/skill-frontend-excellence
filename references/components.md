@@ -2,6 +2,16 @@
 
 Framework-agnostic guidance on standardizing repeated widgets across pages, defining component contracts, and detecting drift before it ships. Polishing each instance separately is not enough: same-purpose widgets must follow one canonical visual and content contract.
 
+## Terms
+
+The rest of this file (and [audit-workflow.md](audit-workflow.md) and [defects.md](defects.md)) uses these terms with the meanings below. Pin them down before reading further.
+
+- **Widget family**: a group of repeated UI elements that serve the same role across pages, e.g. all feature cards, all CTA bands, all hero variants. See the 11-family table below.
+- **Canonical contract**: the single, authoritative visual and content specification for a widget family. Names the required and optional content fields, the allowed variants, the CSS properties that are part of the family (padding, radius, shadow, etc.), and the states (hover, focus, active, disabled, loading). A component is not done until the contract is documented and every instance matches it.
+- **Named variant**: an intentional, documented variation of a component with a clear purpose, exposed through one prop, one class, or one data attribute (e.g., `card--feature`, `card--integration`, `card--pricing`). Variants are part of the contract; ad hoc class combinations are not variants, they are drift.
+- **Drift**: a repeated widget that looks or behaves differently across pages without a named variant. Drift indicates a missing component abstraction or an incomplete variant set. Detected by visual comparison and by the drift collector (below).
+- **Drift collector**: a browser-automation script that reads computed styles and bounding boxes for every member of a family across every audited route, then flags any difference not explained by a named variant.
+
 ## When to Extract
 
 Extraction turns repeated markup into a single source of truth. Extract when any of these hold:
@@ -83,7 +93,7 @@ Programmatic drift detection complements visual review. Collect computed styles 
 
 For each repeated widget selector, collect:
 
-- Width, height, padding, border-radius, border color, background, box-shadow.
+- Width, height, padding, border-radius, border color, border width, border style, background, box-shadow.
 - Heading font-size, weight, line-height.
 - Body font-size, line-height, color.
 - CTA position and size.
@@ -108,7 +118,9 @@ const componentMetrics = await page.evaluate(() => {
       padding: cs.padding,
       radius: cs.borderRadius,
       background: cs.backgroundColor,
-      border: cs.borderColor,
+      borderColor: cs.borderColor,
+      borderWidth: cs.borderWidth,
+      borderStyle: cs.borderStyle,
       shadow: cs.boxShadow,
       headingSize: heading ? getComputedStyle(heading).fontSize : null,
       headingWeight: heading ? getComputedStyle(heading).fontWeight : null,
@@ -176,6 +188,7 @@ Card rows, logo tiles, and grid items must hold a consistent shape regardless of
 
 .card-link:focus-visible,
 .button:focus-visible {
+  outline: 3px solid var(--focus-ring-fallback, #4f8cff);
   outline: 3px solid color-mix(in srgb, var(--accent) 45%, white);
   outline-offset: 3px;
 }
@@ -189,6 +202,8 @@ Card rows, logo tiles, and grid items must hold a consistent shape regardless of
 ```
 
 The `min-width: 0` on grid children is the most-skipped guard against text overflow. Without it, long words break out of the cell and drag the page wide on mobile.
+
+`color-mix(in srgb, ...)` is Baseline 2024. Older browsers fall back to the preceding `outline` declaration, so always provide the static-color line first. If the project supports browsers older than the 2024 baseline, drop the `color-mix` line entirely and use a precomputed token (`var(--color-focus-ring)`) instead.
 
 ### Spacing via gap, not margin stacks
 
@@ -227,5 +242,6 @@ Do not hide visible text behind a mismatched `aria-label`. If the visible text n
 - [audit-workflow.md](audit-workflow.md) for the multi-page audit procedure that builds the widget inventory
 - [defects.md](defects.md) for symptom-to-fix lookup and the canonical geometry sweep
 - [ui-ux.md](ui-ux.md) for state coverage and interaction patterns
+- [accessibility.md](accessibility.md) for focus-visible, accessible names, and contrast rules referenced in the CSS patterns above
 - [responsive.md](responsive.md) for layout primitives
 - [design.md](design.md) for tokens, typography, and shadow language

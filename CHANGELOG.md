@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Three new reference files: `references/audit-workflow.md` (19-phase multi-page audit and polish workflow with capture script and final acceptance gate), `references/components.md` (when to extract, the 11 widget families, component contract checklist, drift detection with collector snippet, CSS patterns that prevent drift), and `references/defects.md` (17-row symptom-to-fix lookup, canonical 9-check programmatic geometry sweep, per-check thresholds).
+- Three new reference files: `references/audit-workflow.md` (19-phase multi-page audit and polish workflow with capture script and final acceptance gate), `references/components.md` (when to extract, the 11 widget families, component contract checklist, drift detection with collector snippet, CSS patterns that prevent drift), and `references/defects.md` (29-row symptom-to-fix lookup, canonical 9-check programmatic geometry sweep, per-check thresholds).
 - Five new "Multi-page consistency" rules in SKILL.md (rules 31 through 35), covering extraction at three instances, no page-local CSS overrides on shared widgets, before-and-after screenshots at canonical viewports, re-render after every fix group on shared widgets, and a clean geometry sweep at `1440x900` and `375x812`.
 - New "Multi-Page Polish Loop" section in SKILL.md indexing the 19 phases with deep links into `audit-workflow.md`.
 - Six new gates in SKILL.md "Self-Improvement" for multi-page audit work (widget inventory built, baseline and after screenshots at both viewports, geometry sweep clean, drift collector clean, per-route audit table delivered).

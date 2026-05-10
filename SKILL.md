@@ -119,7 +119,7 @@ Run the full Lighthouse + axe + visual + responsive + dark-mode + reduced-motion
 
 ## Multi-Page Polish Loop
 
-When the work is auditing or polishing an existing multi-page site, run these 19 phases in order. Each phase is one line below; the full procedure, the operating rules, the capture script, and the acceptance gate live in [audit-workflow.md](references/audit-workflow.md). Component extraction discipline lives in [components.md](references/components.md); the defect lookup and geometry sweep live in [defects.md](references/defects.md).
+When the work is auditing or polishing an existing multi-page site, **read [audit-workflow.md](references/audit-workflow.md) first** for the full procedure (operating rules, capture script, per-phase detail, final acceptance gate). The 19 phases below are the index; deep links jump into the corresponding sections. Component extraction discipline lives in [components.md](references/components.md); the defect lookup and geometry sweep live in [defects.md](references/defects.md).
 
 1. **Discover Context**: identify project root, build system, source directories, dev server, reference target, and route scope.
 2. **Inventory Routes**: build a route list from links, sitemaps, route manifests, and known required pages.
@@ -137,7 +137,7 @@ When the work is auditing or polishing an existing multi-page site, run these 19
 14. **Accessibility Validation**: lang, main, headings, labels, alt, contrast, focus order, no traps, skip link.
 15. **Lighthouse and Performance Polish**: responsive `srcset`, intrinsic dimensions, LCP preload, lazy below the fold, font budget.
 16. **Reference-Level Design Heuristics**: 16 yes-or-no quality tests against the reference target.
-17. **Common Defects and Fixes**: 17-row symptom-to-fix lookup; apply the standard fix at the right layer.
+17. **Common Defects and Fixes**: 29-row symptom-to-fix lookup; apply the standard fix at the right layer.
 18. **Deliverables**: per-page checklist, widget inventory, before-and-after screenshots, validation summary.
 19. **Final Acceptance Gate**: 16-item binary checklist; not done until every item is yes.
 

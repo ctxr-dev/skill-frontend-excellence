@@ -21,7 +21,7 @@ The defect table is one big table by design: one search lands you on the symptom
 | Dropdown not centered | Absolute position tied to item edge | Use `left: 50%`, `transform: translateX(-50%)`, clamp width on small screens |
 | Mobile dropdown off-canvas | Desktop hover rule overrides mobile rule | Add a media-specific override and constrain the dropdown to the viewport |
 | Card row uneven heights | Content-dependent heights with no stretch | Use grid stretch, flex column, `height: 100%`, and stable `min-height` |
-| Only nested CTA clickable | Card visually behaves as a link but the anchor wraps only the CTA | Make the full card an anchor, or use a button-card pattern with a stretched pseudo-element; never nest anchors |
+| Only nested CTA clickable | Card visually behaves as a link but the anchor wraps only the CTA | Make the full card an anchor, or use a button-card pattern with a stretched pseudo-element on the title link; never nest anchors, which is invalid HTML per the `<a>` content model |
 | Duplicate arrows | CSS pseudo-element arrow plus a text or icon arrow | Choose one arrow source and suppress the other by component class |
 | Pricing implies wrong plan | Ambiguous trial or setup wording on shared cards | State paid plan terms and fees plainly; remove repeated misleading phrases |
 | Social icons too far apart or too small | Independent margins and small hit boxes | Use fixed 44px boxes and `gap` |
@@ -42,7 +42,7 @@ The defect table is one big table by design: one search lands you on the symptom
 | Form validation appears late | Validation runs on every keystroke, then debounces | Validate on blur for new errors; clear errors live as the user types |
 | Modal scrolls with the page | Body scroll not locked when modal is open | Lock body scroll on open, restore on close; restore the scroll position |
 | Modal traps keyboard but not screen reader | Background is interactive in the accessibility tree | Mark background `inert` (or `aria-hidden="true"` plus `pointer-events: none`) while modal is open |
-| Skip link overflows the viewport while hidden | `position: absolute; left: -9999px` with no width clamp on focus | Use the standard `.sr-only-focusable` pattern that becomes `position: fixed` on focus |
+| Skip link overflows the viewport while hidden | `position: absolute; left: -9999px` can still extend the document layout box, or the focus state inherits the off-screen position | Use the modern `clip-path: inset(100%)` plus `position: absolute; width: 1px; height: 1px; overflow: hidden` pattern when hidden; switch to `clip-path: inset(0); position: fixed; top: 1rem; left: 1rem` on `:focus` |
 | Tables overflow on mobile | Fixed-width table without scroll wrapper | Wrap in a scroll container with `overflow-x: auto`, or transform to cards below the breakpoint |
 | Empty state is blank | No specific message and no primary action | Add a specific message, the condition that fills it, and a primary action that resolves it |
 
@@ -59,7 +59,7 @@ const issues = await page.evaluate(() => {
     const r = el.getBoundingClientRect();
     const cs = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && cs.display !== "none"
-      && cs.visibility !== "hidden" && cs.opacity !== "0";
+      && cs.visibility !== "hidden" && parseFloat(cs.opacity) > 0;
   };
   const nameFor = (el) =>
     el.tagName.toLowerCase()

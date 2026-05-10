@@ -54,9 +54,9 @@ The lock is body-level: setting `overflow: hidden` on the document root is the s
 
 | Platform | Minimum |
 |----------|--------|
-| iOS / Web on touch | 44x44 CSS pixels (WCAG 2.5.5 AAA: 44x44; AA: 24x24 with adjustments) |
+| iOS / Web on touch | 44x44 CSS pixels (matches WCAG 2.5.5 Target Size Enhanced, Level AAA, from WCAG 2.1) |
 | Android | 48x48 dp |
-| Web on pointer | 24x24 minimum (WCAG 2.5.8 AA), 44x44 strongly recommended |
+| Web on pointer | 24x24 CSS pixels minimum (WCAG 2.5.8 Target Size Minimum, Level AA, added in WCAG 2.2), 44x44 strongly recommended |
 
 For icon-only buttons that look smaller, expand the hit area:
 
