@@ -91,7 +91,7 @@ These four anti-patterns produce most cross-page drift.
 - Creating near-duplicate components with different names but the same semantic purpose. `feature-card`, `feature-tile`, and `benefit-card` that differ only in padding and CTA copy are one component with one variant axis.
 - Fixing drift by adding more one-off CSS selectors. Page-local overrides reduce the symptom and reproduce the disease at the next site of drift.
 - Making one component so generic that every call site needs overrides to look right. Generic components without strong defaults push the styling burden back to the page, which is where the drift lives.
-- Hardcoding a DOM `id` (or an `aria-controls` / `aria-labelledby` target) inside a reusable component. Rendered more than once on a page it produces duplicate ids: invalid HTML, a Lighthouse `duplicate-id-aria` failure, and broken ARIA wiring (a label or control points at the wrong instance). Generate a unique id per instance and namespace children under it.
+- Hardcoding a DOM `id` (or an `aria-controls` / `aria-labelledby` target) inside a reusable component. Rendered more than once on a page it produces duplicate ids: invalid HTML, a Lighthouse `duplicate-id` (or axe `duplicate-id-aria`) failure, and broken ARIA wiring (a label or control points at the wrong instance). Generate a unique id per instance and namespace children under it.
 
 ## Drift Detection
 

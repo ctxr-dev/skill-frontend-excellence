@@ -156,7 +156,8 @@ for (const f of files) {
   const title = decode((s.match(/<title>([^<]*)<\/title>/) || [])[1] || "");
   if (!noindex && (title.length < 50 || title.length > 60)) problems.push(`TITLE ${title.length} ${rel}`);
 
-  const desc = (s.match(/<meta name=["']description["'] content=["']([^"']*)/) || [])[1] || "";
+  const descTag = (s.match(/<meta\b[^>]*\bname=["']description["'][^>]*>/i) || [])[0] || "";
+  const desc = (descTag.match(/\bcontent=["']([^"']*)/i) || [])[1] || "";
   if (!noindex && (desc.length < 140 || desc.length > 160)) problems.push(`DESC ${desc.length} ${rel}`);
 
   if (!noindex && !/rel=["']canonical["']/.test(s)) problems.push(`NO-CANONICAL ${rel}`);
@@ -194,7 +195,7 @@ The thresholds below align with the North Star Targets in the entry SKILL.md and
 | Check | Threshold | Source |
 |-------|-----------|--------|
 | Capture viewports | `1440x900` desktop, `375x812` mobile | [responsive.md](responsive.md) breakpoints table |
-| Touch target minimum | 44 by 44 CSS pixels | Rule 25 in SKILL.md, [ui-ux.md](ui-ux.md) hit targets table |
+| Touch target minimum | 44 by 44 CSS pixels | Rule 29 in SKILL.md, [ui-ux.md](ui-ux.md) hit targets table |
 | Horizontal overflow tolerance | 0 px on mobile, 0 px on desktop | [responsive.md](responsive.md) |
 | Duplicate arrow count | 0 across all visible labels | This file, defect table |
 | Dropdown centering tolerance | 4 px from trigger center | This file, geometry sweep |
