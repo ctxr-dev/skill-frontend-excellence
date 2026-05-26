@@ -158,7 +158,7 @@ for (const f of files) {
   if (!noindex && (title.length < 50 || title.length > 60)) problems.push(`TITLE ${title.length} ${rel}`);
 
   const descTag = (s.match(/<meta\b[^>]*\bname=["']description["'][^>]*>/i) || [])[0] || "";
-  const desc = (descTag.match(/\bcontent=["']([^"']*)/i) || [])[1] || "";
+  const desc = decode((descTag.match(/\bcontent=["']([^"']*)/i) || [])[1] || "");
   if (!noindex && (desc.length < 140 || desc.length > 160)) problems.push(`DESC ${desc.length} ${rel}`);
 
   if (!noindex && !/rel=["']canonical["']/.test(s)) problems.push(`NO-CANONICAL ${rel}`);

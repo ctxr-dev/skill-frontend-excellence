@@ -184,7 +184,7 @@ A condensed view. Every rule has a longer treatment in the references.
 
 ### UI/UX (the levers that move perceived quality)
 
-29. **Touch targets >= 44x44pt (iOS) or >= 48x48dp (Android) for standalone controls**, with 8px+ spacing. Inline text links (breadcrumbs, in-prose links, footer text lists) are exempt under WCAG 2.5.8; do not inflate them to 44px, it reads as broken. Reserve the large target for buttons, toggles, icon buttons, and CTAs.
+29. **Touch targets >= 44x44 CSS px for standalone controls** (the iOS 44pt / Android 48dp guideline), with 8px+ spacing. Inline text links (breadcrumbs, in-prose links, footer text lists) are exempt under WCAG 2.5.8; do not inflate them to 44px, it reads as broken. Reserve the large target for buttons, toggles, icon buttons, and CTAs.
 30. **Every async action has loading -> success/error feedback within 100ms of the trigger.** Skeleton screens beat spinners after 300ms.
 31. **One primary CTA per screen.** Secondary actions visually subordinate; destructive actions visually separated.
 32. **State the empty state.** Empty lists, empty searches, and zero-data charts get a specific message, not a blank canvas.

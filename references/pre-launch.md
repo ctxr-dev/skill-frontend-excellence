@@ -116,7 +116,7 @@ Per breakpoint:
 - [ ] No horizontal scroll
 - [ ] No clipped content
 - [ ] Layout is intentional, not just fluid
-- [ ] Touch targets >= 44x44 with 8px gaps (mobile/tablet)
+- [ ] Standalone touch targets >= 44x44 with 8px gaps (mobile/tablet); inline text links are NOT inflated (WCAG 2.5.8 exception)
 - [ ] Body text >= 16px on mobile (avoids iOS auto-zoom)
 - [ ] Tables either fit, scroll horizontally, or transform to cards
 - [ ] Sidebar / nav transforms appropriately
@@ -124,7 +124,6 @@ Per breakpoint:
 - [ ] Safe areas respected (notch, dynamic island, gesture bar)
 - [ ] `100dvh` (not `100vh`) for full-height mobile sections
 - [ ] Mobile nav works with JavaScript disabled (a `<noscript>` fallback or static links that enhance).
-- [ ] Standalone controls are >= 44px; inline text links are NOT inflated (WCAG 2.5.8 exception).
 - [ ] Modals and drawers lock body scroll AND compensate for scrollbar width (no sideways jump on open or close).
 
 ## 6. Theme
