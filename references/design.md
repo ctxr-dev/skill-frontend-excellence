@@ -396,6 +396,8 @@ Inverting a light-mode design rarely works. Plan dark mode as its own design pas
 
 The brand primary often needs to be lighter and slightly desaturated in dark mode. Test contrast.
 
+A brand accent tuned for light mode usually fails as text on dark. A saturated accent (a mid blue, green, or red) that clears 4.5:1 against white commonly drops below 4.5:1 against a near-black surface, so accent-colored body text, links, and small labels fail AA in dark mode even though buttons (which use the accent as a background with white text) look fine. Define a separate, lightened accent token for text and links on dark surfaces, and verify both modes independently. This is distinct from focus-ring contrast (which is about the ring against its surface) and from surface-on-surface contrast; it is specifically foreground text color on the dark base.
+
 ### Imagery
 
 Photography in dark mode often needs a slight darken or color grade to feel cohesive. Illustrations may need dark-mode variants.

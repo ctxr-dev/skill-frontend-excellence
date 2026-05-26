@@ -80,6 +80,33 @@ X-Robots-Tag HTTP header is equivalent and works for non-HTML resources (PDFs, i
 X-Robots-Tag: noindex, nofollow
 ```
 
+Pair the two signals: when a page is `noindex` (a duplicate, an alternate, a thin or utility page), also EXCLUDE it from the sitemap. A `noindex` page still listed in the sitemap is a mixed signal (you are asking Google to crawl what you told it not to index) and shows up as a "Submitted URL marked noindex" issue in Search Console. Indexable pages: `index` plus listed in the sitemap. Non-indexable pages: `noindex` plus absent from the sitemap.
+
+### AI Answer Engines (AEO / GEO)
+
+Generative search (ChatGPT, Claude, Perplexity, Google AI overviews) is now a real discovery and citation surface. Make the site quotable, not just rankable.
+
+- Publish `/llms.txt`: a short overview of what the site is plus a flat index of the canonical pages (title and URL per line). This is the AI-era analog of a sitemap for humans-plus-models.
+- Optionally publish `/llms-full.txt`: the load-bearing facts an answer engine will quote verbatim (what the product does, the numbers, the pricing, the data model), in plain prose. Keep it consistent with the rendered pages and the structured data.
+- Allow-list the major AI crawler user-agents in `robots.txt` and reference the sitemap, so models that respect robots can fetch:
+
+```
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: PerplexityBot
+User-agent: Google-Extended
+User-agent: CCBot
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://example.com/sitemap.xml
+```
+
+- Parity is the whole game: an engine quotes rendered text and valid structured data. If a fact lives only in an image, only in client-rendered JS, or only in the JSON-LD, it is at risk. State load-bearing facts in server-rendered text.
+
+The check: `llms.txt` exists and lists every canonical page; robots.txt allow-lists the AI user-agents and references the sitemap; the facts an engine would quote appear in server-rendered HTML, not only in images or JS.
+
 ### Canonical Tag
 
 Every indexable page has a self-referencing canonical:
@@ -107,7 +134,7 @@ Rules:
 Rules:
 
 - Unique per page across the entire site.
-- 50-60 characters before truncation in the SERP.
+- 50-60 characters before truncation in the SERP. Measure the RENDERED length, not the raw HTML source. Decode entities first: `&amp;` is one character in the SERP, not five; `&#39;` is one, not five. A naive `.length` on the raw `<title>` over-counts any title with entities and triggers false "too long" fixes. In an automated check, decode entities (or read `document.title`) before comparing to 60.
 - Primary intent term near the beginning when natural.
 - Brand name at the end (separator: pipe `|` or hyphen). Some sources advise omitting the brand on home/category pages where the SERP already attaches it.
 - No keyword stuffing, no all caps, no emoji unless the brand allows.
@@ -118,6 +145,7 @@ Common failures:
 - Title longer than 60 chars (truncated).
 - Title that reads like a slug (`pricing-page-brand`).
 - Auto-generated `Home | Brand` on every page.
+- Templated overflow: a `[slug]` or detail-page template that appends `" | Brand"` onto an already-descriptive title pushes most instances past 60 chars, so Google rewrites the title in the SERP (you lose control of it). Drop the brand suffix on templated and detail pages; keep the brand only where the base title is short (home, top-level hubs). Measure the longest realistic generated title, not a short example.
 
 ### Meta Description
 
@@ -187,12 +215,24 @@ Every public page exposes:
 <meta name="twitter:site" content="@brand" />
 ```
 
+Set `og:type` per page type, do not hardcode it: `article` on articles, blog posts, and detail pages (product, case study, item); `website` on the home page and section hubs. Article-typed pages should also carry `article:published_time` and `article:modified_time` when available.
+
 Image rules:
 
 - 1200x630 PNG or JPEG.
 - Under 5 MB. Aim for under 500 KB.
 - Text in the image legible at thumbnail size.
 - Avoid rendering critical info only in the image; the description should stand on its own.
+
+### Generating per-template OG images
+
+Hand-designing one OG image per page does not scale. Generate them at build time so every page ships a distinct, on-brand 1200x630 image.
+
+- Pipeline: render a template to SVG (for example with `satori`, which lays out a small subset of HTML and CSS), then rasterize the SVG to PNG (for example with `resvg`). Run it at build time as a prerendered endpoint per template, so there is zero runtime cost and it works on static hosts.
+- Font gotcha: the SVG text layout step needs a `ttf`, `otf`, or `woff` font. It cannot read `woff2`. Variable-font packages often ship `woff2` only, so source a `woff` or `ttf` explicitly.
+- Bundler gotcha: a native-addon rasterizer must be marked external to the bundler (the SSR external list plus the dependency-optimizer exclude list), or the build fails trying to bundle a binary.
+- A single designed static image is a fine default and home-page image; generate per-template images for the long tail (articles, items, detail pages).
+- Keep the output under 500 KB and ensure the text is legible at thumbnail size (the existing image rules still apply).
 
 ## Structured Data (JSON-LD)
 
@@ -250,6 +290,8 @@ Add to `<head>`. One `<script type="application/ld+json">` block per type, or a 
 </script>
 ```
 
+Build this JSON-LD from the SAME ordered array that renders the visible breadcrumb UI, so the structured data and the on-page trail can never disagree (mismatched breadcrumbs are a common Rich Results warning). Emit it on every interior page that shows a breadcrumb, including legal and utility pages that have one.
+
 ### Article (blog posts, news)
 
 ```html
@@ -287,11 +329,20 @@ Add to `<head>`. One `<script type="application/ld+json">` block per type, or a 
 </script>
 ```
 
-Only use FAQPage when the FAQ is genuinely on the page and visible to users.
+Only use FAQPage when the FAQ is genuinely on the page and visible to users. Note on SERP features: Google rolled back FAQ rich results (limited, then effectively retired for most sites between 2023 and 2026) and retired HowTo rich results (2023). Keep `FAQPage` and `HowTo` markup when it is accurate and parity-correct, because it is still valid and it feeds AI answer engines, but do not plan around them as winnable rich-result features. The highest-ROI structured data for most sites today is Organization, WebSite, BreadcrumbList, Article, Product or SoftwareApplication, and VideoObject.
 
 ### Product / SoftwareApplication / HowTo / Recipe / Event / etc.
 
 Use the schema.org type that best matches the page content. Validate every JSON-LD with the Rich Results Test before declaring it complete.
+
+### Never fabricate structured data
+
+Structured data is a claim Google can verify and penalize. Emit only what is real:
+
+- No invented `aggregateRating` or `review`. Add a rating object only when real, on-site or first-party reviews back it. Fabricated ratings risk manual action and are stripped when they do not match visible content.
+- `sameAs` lists only profiles that actually exist and belong to the entity. Build it from a real list and emit nothing when the list is empty (do not ship placeholder social URLs).
+- Emit `WebSite` `SearchAction` only when a working search endpoint exists at the `target` URL. Google requires the search to function; a `SearchAction` pointing at a non-existent search is a defect, not an enhancement.
+- Parity rule: every value in the JSON-LD should be derivable from visible page content. If it is not on the page, it does not belong in the markup.
 
 ### Validation
 
@@ -372,6 +423,14 @@ For YMYL (Your Money Your Life) topics (medical, legal, financial), expertise an
 - Contact and "About" pages.
 
 For non-YMYL, expertise is still useful but not as strict.
+
+## Render primary content on the server
+
+Search crawlers and AI crawlers index what is in the HTML response. Text that only appears after client-side hydration (inside an island, a partial-hydration region, or any JS-only render) may never be indexed and is invisible to crawlers that do not execute JS.
+
+- Server-render (SSR or SSG) all primary content and any text inside interactive components, then hydrate for interactivity.
+- Verify by viewing source (not the DevTools DOM, which shows post-JS state) or by loading with JavaScript disabled. Every load-bearing sentence, price, and heading must be present.
+- A partially-hydrated widget that renders only its active state in static HTML (for example a toggle showing one of three values) is acceptable for the visible state, but put the full set of facts somewhere server-rendered (a static list, an sr-only block, or the structured data and prose).
 
 ## Common SEO Mistakes
 

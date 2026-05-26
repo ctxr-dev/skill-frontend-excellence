@@ -27,6 +27,10 @@ Do not extract when:
 
 The principle expressed as a check: a repeated widget either has one source of truth or has a documented, named variant. There is no third option.
 
+Extract data before markup. The first duplication to remove is shared DATA, not shared structure: a value used in two or more places (a domain or base URL, a price, a label, a disclaimer, a magic number, an enum) belongs in one module that every call site imports. Hardcoding the same string or number in several files is the most common and most damaging form of drift, because the copies diverge silently.
+
+Know when to STOP extracting. A duplicate that varies by exactly one value is a clean component with one prop. A near-duplicate that would need two or more shape or layout props to cover its variants is usually a premature abstraction: it pushes the styling burden back to the call site (the over-generic-component anti-pattern above) and is harder to read than the duplication it replaced. Extract data and structurally-identical blocks; leave contextually-distinct near-duplicates inline and note them.
+
 ## The 11 Widget Families
 
 Every multi-page polish pass starts by inventorying these families. For each family the inventory must record: routes where it appears, source (template or component or duplicated markup), required and optional content fields, allowed variants, and the canonical visual contract (spacing, typography, border, radius, shadow, color, icon placement, image ratio, CTA behavior, focus ring, hover behavior, responsive behavior).
@@ -62,6 +66,7 @@ A widget is ready for extraction when every item below is true. Before declaring
 - [ ] No page-specific magic numbers exist inside the component unless exposed as a named variant.
 - [ ] The component owns its CSS. Page-local overrides on shared widgets are forbidden.
 - [ ] Variants are explicit (one prop, one class, one data attribute), not arbitrary class combinations.
+- [ ] No hardcoded DOM `id` inside the component. Any `id` (and any `aria-controls`, `aria-labelledby`, `for`, or `href="#..."` that targets one) is derived from a per-instance unique id (`useId()` or the framework equivalent) and child ids are namespaced under it. A component with a static id breaks the moment it renders twice on a page.
 
 A component shipped without these answers is half-built and will drift on the next page.
 
@@ -86,6 +91,7 @@ These four anti-patterns produce most cross-page drift.
 - Creating near-duplicate components with different names but the same semantic purpose. `feature-card`, `feature-tile`, and `benefit-card` that differ only in padding and CTA copy are one component with one variant axis.
 - Fixing drift by adding more one-off CSS selectors. Page-local overrides reduce the symptom and reproduce the disease at the next site of drift.
 - Making one component so generic that every call site needs overrides to look right. Generic components without strong defaults push the styling burden back to the page, which is where the drift lives.
+- Hardcoding a DOM `id` (or an `aria-controls` / `aria-labelledby` target) inside a reusable component. Rendered more than once on a page it produces duplicate ids: invalid HTML, a Lighthouse `duplicate-id-aria` failure, and broken ARIA wiring (a label or control points at the wrong instance). Generate a unique id per instance and namespace children under it.
 
 ## Drift Detection
 

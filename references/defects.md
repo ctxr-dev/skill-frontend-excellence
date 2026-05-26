@@ -40,7 +40,7 @@ The defect table is one big table by design: one search lands you on the symptom
 | Unstyled flash on hydration | Critical CSS not inlined | Inline above-the-fold CSS under 14 KB so it fits in the first round trip |
 | Button label truncates on mobile | Fixed width or `white-space: nowrap` with insufficient room | Constrain by `max-width`, allow wrap, or shorten the label |
 | Form validation appears late | Validation runs on every keystroke, then debounces | Validate on blur for new errors; clear errors live as the user types |
-| Modal scrolls with the page | Body scroll not locked when modal is open | Lock body scroll on open, restore on close; restore the scroll position |
+| Modal scrolls with the page | Body scroll not locked when modal is open | Lock body scroll on open and restore on close. Compensate for the scrollbar width or the page shifts sideways: measure `gap = window.innerWidth - document.documentElement.clientWidth`, set `body { overflow: hidden }` plus `padding-right: gap` while open, and restore both on close. On overlay-scrollbar systems `gap` is 0, so there is no shift. Also restore the scroll position. |
 | Modal traps keyboard but not screen reader | Background is interactive in the accessibility tree | Mark background `inert` (or `aria-hidden="true"` plus `pointer-events: none`) while modal is open |
 | Skip link overflows the viewport while hidden | `position: absolute; left: -9999px` can still extend the document layout box, or the focus state inherits the off-screen position | Use the modern `clip-path: inset(100%)` plus `position: absolute; width: 1px; height: 1px; overflow: hidden` pattern when hidden; switch to `clip-path: inset(0); position: fixed; top: 1rem; left: 1rem` on `:focus` |
 | Tables overflow on mobile | Fixed-width table without scroll wrapper | Wrap in a scroll container with `overflow-x: auto`, or transform to cards below the breakpoint |
@@ -116,6 +116,76 @@ The sweep returns nine check categories. Run it on every audited route at both c
 The base snippet covers checks 1 through 4 directly. Checks 5 through 8 require selectors and triggers specific to the project under audit; add them to the same `evaluate` call. Check 9 is the slot for any rule the project enforces on top of the standard nine.
 
 Filter false positives only when you can explain them: hidden off-canvas content, intentionally overflowing dropdown internals that do not affect the page viewport, or a tap target that is intentionally part of a larger ancestor hit area. Document the filter so the next run does not re-discover it.
+
+The small-target check (interactive element under 44 by 44) must EXEMPT inline text links, or it floods with false positives. Skip links whose computed `display` is `inline` or `inline-block` and that sit inside a paragraph, list item, or breadcrumb, per the WCAG 2.5.8 inline exception. Only flag standalone controls (buttons, toggles, CTAs, icon buttons, form controls).
+
+## Programmatic Content and Markup Sweep
+
+The geometry sweep above catches visual defects. This companion sweep catches content, markup, and SEO defects that a screenshot cannot show: a missing canonical, a second H1, a title that is too long, an unparseable JSON-LD block, an image with no alt, an orphan page, a duplicate id. Run it over the BUILT HTML (the shipped output, not the dev server) on every route.
+
+It complements, it does not replace, the Rich Results Test (which validates JSON-LD content against Google's rules). This sweep only checks that the markup is present and parseable.
+
+```js
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+
+const DIST = process.argv[2] || "dist";
+const files = [];
+(function walk(d){ for (const e of readdirSync(d)) {
+  const p = join(d, e);
+  statSync(p).isDirectory() ? walk(p) : p.endsWith(".html") && files.push(p);
+}})(DIST);
+
+const decode = (s) => s
+  .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+  .replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"');
+
+const problems = [];
+const linkedTo = new Set();
+const pages = [];
+
+for (const f of files) {
+  const rel = f.replace(DIST, "");
+  const s = readFileSync(f, "utf8");
+  const noindex = /name=["']robots["'][^>]*noindex/.test(s);
+  pages.push(rel.replace(/index\.html$/, "").replace(/\.html$/, "") || "/");
+
+  const h1 = (s.match(/<h1[\s>]/g) || []).length;
+  if (h1 !== 1) problems.push(`H1=${h1} ${rel}`);
+
+  const title = decode((s.match(/<title>([^<]*)<\/title>/) || [])[1] || "");
+  if (!noindex && (title.length < 50 || title.length > 60)) problems.push(`TITLE ${title.length} ${rel}`);
+
+  const desc = (s.match(/<meta name=["']description["'] content=["']([^"']*)/) || [])[1] || "";
+  if (!noindex && (desc.length < 140 || desc.length > 160)) problems.push(`DESC ${desc.length} ${rel}`);
+
+  if (!noindex && !/rel=["']canonical["']/.test(s)) problems.push(`NO-CANONICAL ${rel}`);
+  if (!noindex && !/property=["']og:title["']/.test(s)) problems.push(`NO-OG ${rel}`);
+
+  for (const m of s.matchAll(/<img\b[^>]*>/g)) if (!/\salt=/.test(m[0])) problems.push(`IMG-NO-ALT ${rel}`);
+  if (/href=["']#["']/.test(s)) problems.push(`DEAD-ANCHOR ${rel}`);
+
+  const ids = [...s.matchAll(/\sid=["']([^"']+)["']/g)].map((m) => m[1]);
+  const seen = new Set(), dup = new Set();
+  for (const id of ids) { if (seen.has(id)) dup.add(id); seen.add(id); }
+  if (dup.size) problems.push(`DUP-ID ${rel}: ${[...dup].join(", ")}`);
+
+  for (const m of s.matchAll(/<script type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/g)) {
+    try { JSON.parse(m[1]); } catch (e) { problems.push(`BAD-JSONLD ${rel}: ${e.message}`); }
+  }
+
+  for (const m of s.matchAll(/href=["'](\/[^"'#?]*)/g)) linkedTo.add(m[1].replace(/\/$/, "") || "/");
+}
+
+for (const p of pages) {
+  const norm = p.replace(/\/$/, "") || "/";
+  if (norm !== "/404" && !linkedTo.has(norm)) problems.push(`ORPHAN ${norm}`);
+}
+
+console.log(problems.length ? problems.join("\n") : "NO PROBLEMS");
+```
+
+A run is clean when it prints `NO PROBLEMS`. Tune the length thresholds to the project's title and description bars. The sweep uses only Node and string parsing, so it needs no browser; pair it with the geometry sweep (which needs a headless browser) for full coverage. Filter a false positive only when you can explain it (a deliberately noindex utility page, an intentional single-instance id), and document the filter.
 
 ## Per-Check Thresholds
 

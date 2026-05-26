@@ -30,6 +30,25 @@ CSS pattern:
 
 Avoid `max-width` queries layered downward; they invert the natural flow.
 
+### The mobile nav must survive without JavaScript
+
+A common pattern hides the desktop nav on small screens with CSS and replaces it with a JS-driven menu (a disclosure, an island, or a component hydrated only at a mobile breakpoint). This is good for performance, but it has a trap: the menu's links do not exist in the static HTML until the JavaScript hydrates. With JS disabled, slow, or failed, a phone has a logo and nothing to navigate with.
+
+- Ship a `<noscript>` fallback nav (a plain `<nav>` of the same links, shown only on small screens) so the site is navigable without JavaScript:
+
+```html
+<noscript>
+  <!-- shown only on small screens; the JS menu replaces it when hydrated -->
+  <nav aria-label="Primary" class="mobile-only">
+    <ul><li><a href="/a">A</a></li><li><a href="/b">B</a></li></ul>
+  </nav>
+</noscript>
+```
+
+- Or render the links in static HTML always and let the JavaScript progressively enhance them into a toggle.
+- Keep the performance-minded hydration directive (load the menu JS only on small screens). The point is that the LINKS exist without JS, not that the enhanced interaction does.
+- The check: load any page with JavaScript disabled at a phone width. Every primary nav destination must be reachable.
+
 ## Breakpoints
 
 Pick a small, consistent set. Common scales:

@@ -30,6 +30,15 @@ These rules apply to every phase below. Treat any violation as a defect.
 12. Run available validation commands before final delivery: build, lint, stylelint, tests, visual capture, accessibility checks, Lighthouse, and the geometry sweep in [defects.md](defects.md).
 13. Never declare the pass complete while known visible issues remain.
 
+### Parallelizing an audit or fix pass across agents (optional)
+
+When the audit or the fixes are split across multiple automated agents:
+
+- Give each agent a DISJOINT set of files. Two agents editing the same file collide and overwrite each other.
+- Do the shared foundation first (shared components, tokens, shared data modules), serially, before fanning out page-level work that depends on it.
+- Verify centrally after all agents finish, with the programmatic sweeps and a rebuild. Per-agent self-reports are not the gate.
+- Trust but verify each report. An agent may read a file while another is mid-edit and report it "broken" when it is not, or flag a correct value as wrong. Re-read the file before acting on a surprising claim.
+
 ## Phase 1: Discover Context
 
 Before capturing or editing, determine:
@@ -220,6 +229,8 @@ Use browser automation to catch issues that screenshots miss: viewport bleed, hi
 The canonical 9-check sweep, the JS snippet that runs it, and the per-check thresholds live in [defects.md](defects.md). Run it on every audited route at both capture viewports. A run is clean when every check returns zero issues.
 
 Filter false positives only when you can explain them, such as hidden off-canvas content or intentionally overflowing dropdown internals that do not affect the page viewport. Document the filter so the next run does not re-discover it.
+
+Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See defects.md for both. A route is not signed off until both return clean.
 
 ## Phase 12: Component Drift Checks
 
