@@ -117,7 +117,7 @@ The base snippet covers checks 1 through 4 directly. Checks 5 through 8 require 
 
 Filter false positives only when you can explain them: hidden off-canvas content, intentionally overflowing dropdown internals that do not affect the page viewport, or a tap target that is intentionally part of a larger ancestor hit area. Document the filter so the next run does not re-discover it.
 
-The small-target check (interactive element under 44 by 44) must EXEMPT inline text links, or it floods with false positives. The base snippet above does NOT do this yet; extend its small-target loop to skip links whose computed `display` is `inline` or `inline-block` and that sit inside a paragraph, list item, or breadcrumb, per the WCAG 2.5.8 inline exception. After the extension, only standalone controls (buttons, toggles, CTAs, icon buttons, form controls) are flagged. Minimal conditional inside the loop: `const cs = getComputedStyle(el); if ((cs.display === "inline" || cs.display === "inline-block") && el.closest("p, li, nav[aria-label*='breadcrumb' i]")) return;`.
+The small-target check (interactive element under 44 by 44) must EXEMPT inline text links, or it floods with false positives. The base snippet above does NOT do this yet; extend its small-target loop to skip links whose computed `display` is `inline` or `inline-block` and that sit inside a paragraph, list item, or breadcrumb, per the WCAG 2.5.8 inline exception. After the extension, only standalone controls (buttons, toggles, CTAs, icon buttons, form controls) are flagged. Minimal conditional at the top of the small-target `for...of` loop (use `continue`, not `return`, or you exit the whole `page.evaluate` callback): `const cs = getComputedStyle(el); if ((cs.display === "inline" || cs.display === "inline-block") && el.closest("p, li, nav[aria-label*='breadcrumb' i]")) continue;`.
 
 ## Programmatic Content and Markup Sweep
 
@@ -147,7 +147,8 @@ const pages = [];
 for (const f of files) {
   const rel = f.replace(DIST, "");
   const s = readFileSync(f, "utf8");
-  const noindex = /name=["']robots["'][^>]*noindex/.test(s);
+  const robotsTag = (s.match(/<meta\b[^>]*\bname=["']robots["'][^>]*>/i) || [])[0] || "";
+  const noindex = /noindex/i.test(robotsTag);
   pages.push(rel.replace(/index\.html$/, "").replace(/\.html$/, "") || "/");
 
   const h1 = (s.match(/<h1[\s>]/g) || []).length;

@@ -157,7 +157,7 @@ Lighthouse runs the axe-core ruleset. Failing any rule drops the score below 100
 A strict `script-src 'self'` (no nonce, no inline) is the single most common way to silently break a modern site. Island, partial, and resumable hydration (Astro, Next, Qwik, SolidStart) emit small inline bootstrap scripts; counters, facades, and disclosure widgets do too. Block them and two things fail at once: the components never hydrate (the page looks fine but nothing is interactive), and `errors-in-console` (Best Practices) fails on the CSP violation logs, so you cannot reach 100.
 
 - Dynamic server: mint a per-request nonce and add it to every inline script tag and to `script-src 'nonce-...'`.
-- Static hosting (no per-request server, so no nonces and no rotating hashes): allow `'unsafe-inline'` for `script-src`, and keep everything else strict: `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, and scope `frame-src` and `img-src` to the embeds you actually use. This is a deliberate, documented tradeoff, not a default-off.
+- Static hosting (no per-request server, so no nonces): prefer build-time script HASHES. If the set of inline scripts is enumerable at build, compute a `sha256` (or `sha384`/`sha512`) hash of each and list them in `script-src 'sha256-...'`; hashes are strictly safer than `'unsafe-inline'` and work on a static host. Fall back to `'unsafe-inline'` for `script-src` only when per-page or per-build hydration scripts make the hash set impractical to enumerate. Either way, keep everything else strict: `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`, and scope `frame-src` and `img-src` to the embeds you actually use. Allowing `'unsafe-inline'` is a deliberate, documented tradeoff, not a default-off.
 - Verify in the SHIPPED headers, not the source config. A `_headers` file or header rule can be copied verbatim, transformed, or dropped by the build; check the built output and the live response (`curl -I`).
 
 ### SEO audits
@@ -212,7 +212,7 @@ Lighthouse CI (`@lhci/cli`) is the standard way to enforce thresholds in CI. A m
 Two rules for the URL list:
 
 - Cover every indexable route CLASS, not a subset. One representative per template (home, each hub, a detail page of each kind, each standalone page) is enough, but a route class that is never scored can regress and still pass CI. The most common miss is shipping new content-page templates that were never added to the list.
-- Never put a `noindex` page in a config that asserts `categories:seo: ["error", { minScore: 1 }]`. Lighthouse's `is-crawlable` audit fails on `noindex`, which drops the SEO category below 1 and fails the gate, even though the page is intentionally non-indexable. Score noindex pages (a 404, a duplicate, an auth wall) in a separate config without the SEO assertion, or leave them out. The Score Targets table already notes SEO is "n/a if noindex"; the CI list must honor that.
+- Never put a `noindex` page in a config that asserts `"categories:seo": ["error", { "minScore": 1 }]`. Lighthouse's `is-crawlable` audit fails on `noindex`, which drops the SEO category below 1 and fails the gate, even though the page is intentionally non-indexable. Score noindex pages (a 404, a duplicate, an auth wall) in a separate config without the SEO assertion, or leave them out. The Score Targets table already notes SEO is "n/a if noindex"; the CI list must honor that.
 
 Run a separate mobile config with `preset: 'mobile'` (default) and lower thresholds (0.95 perf). Run both as required CI gates.
 
