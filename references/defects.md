@@ -117,7 +117,7 @@ The base snippet covers checks 1 through 4 directly. Checks 5 through 8 require 
 
 Filter false positives only when you can explain them: hidden off-canvas content, intentionally overflowing dropdown internals that do not affect the page viewport, or a tap target that is intentionally part of a larger ancestor hit area. Document the filter so the next run does not re-discover it.
 
-The small-target check (interactive element under 44 by 44) must EXEMPT inline text links, or it floods with false positives. Skip links whose computed `display` is `inline` or `inline-block` and that sit inside a paragraph, list item, or breadcrumb, per the WCAG 2.5.8 inline exception. Only flag standalone controls (buttons, toggles, CTAs, icon buttons, form controls).
+The small-target check (interactive element under 44 by 44) must EXEMPT inline text links, or it floods with false positives. The base snippet above does NOT do this yet; extend its small-target loop to skip links whose computed `display` is `inline` or `inline-block` and that sit inside a paragraph, list item, or breadcrumb, per the WCAG 2.5.8 inline exception. After the extension, only standalone controls (buttons, toggles, CTAs, icon buttons, form controls) are flagged. Minimal conditional inside the loop: `const cs = getComputedStyle(el); if ((cs.display === "inline" || cs.display === "inline-block") && el.closest("p, li, nav[aria-label*='breadcrumb' i]")) return;`.
 
 ## Programmatic Content and Markup Sweep
 
@@ -186,7 +186,7 @@ for (const p of pages) {
 console.log(problems.length ? problems.join("\n") : "NO PROBLEMS");
 ```
 
-A run is clean when it prints `NO PROBLEMS`. Tune the length thresholds to the project's title and description bars. The sweep uses only Node and string parsing, so it needs no browser; pair it with the geometry sweep (which needs a headless browser) for full coverage. Filter a false positive only when you can explain it (a deliberately noindex utility page, an intentional single-instance id), and document the filter.
+A run is clean when it prints `NO PROBLEMS`. Tune the length thresholds to the project's title and description bars. The `decode()` helper is intentionally minimal (it covers the five most common entities only); a title carrying `&nbsp;`, `&#x27;`, `&#8217;`, or any other entity it does not list will still over-count against the hard 50 to 60 length check, so swap in a complete entity decoder (a small library, or read `document.title` in a DOM context) before trusting the length numbers in real tooling. The sweep uses only Node and string parsing, so it needs no browser; pair it with the geometry sweep (which needs a headless browser) for full coverage. Filter a false positive only when you can explain it (a deliberately noindex utility page, an intentional single-instance id), and document the filter.
 
 ## Per-Check Thresholds
 

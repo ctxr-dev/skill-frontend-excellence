@@ -230,7 +230,7 @@ The canonical 9-check sweep, the JS snippet that runs it, and the per-check thre
 
 Filter false positives only when you can explain them, such as hidden off-canvas content or intentionally overflowing dropdown internals that do not affect the page viewport. Document the filter so the next run does not re-discover it.
 
-Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See defects.md for both. A route is not signed off until both return clean.
+Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See [defects.md](defects.md) for both. A route is not signed off until both return clean.
 
 ## Phase 12: Component Drift Checks
 

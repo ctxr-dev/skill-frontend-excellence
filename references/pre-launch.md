@@ -42,7 +42,7 @@ npx lighthouse "http://localhost:3001/<path>" \
 
 Verify each category. If any score drops below the bar, identify the failing audit and fix per [lighthouse.md](lighthouse.md).
 
-Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See defects.md for both. A route is not signed off until both return clean.
+Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See [defects.md](defects.md) for both. A route is not signed off until both return clean.
 
 - [ ] Verify the SHIPPED artifact, not the source. Static files and headers (a `_headers` or redirects file, `robots.txt`, `sitemap.xml`, security headers, the manifest) are copied, transformed, or sometimes dropped by the build. Check them in the built output directory and, after deploy, in the live HTTP response (`curl -I https://...`), not just in the source tree. A correct source `_headers` that did not make it into the build is the classic "it works locally" header bug.
 
