@@ -88,7 +88,7 @@ Generative search (ChatGPT, Claude, Perplexity, Google AI overviews) is now a re
 
 - Publish `/llms.txt`: a short overview of what the site is plus a flat index of the canonical pages (title and URL per line). This is the AI-era analog of a sitemap for humans-plus-models.
 - Optionally publish `/llms-full.txt`: the load-bearing facts an answer engine will quote verbatim (what the product does, the numbers, the pricing, the data model), in plain prose. Keep it consistent with the rendered pages and the structured data.
-- Allow-list the major AI crawler user-agents in `robots.txt` and reference the sitemap, so models that respect robots can fetch:
+- Make sure the major AI crawler user-agents are NOT blocked in `robots.txt`, and reference the sitemap, so models that respect robots can fetch. Add this group ALONGSIDE your existing rules (it does not replace your `User-agent: *` policy); it only matters as an explicit allow when your baseline policy would otherwise disallow these agents:
 
 ```
 User-agent: GPTBot
@@ -105,7 +105,7 @@ Sitemap: https://example.com/sitemap.xml
 
 - Parity is the whole game: an engine quotes rendered text and valid structured data. If a fact lives only in an image, only in client-rendered JS, or only in the JSON-LD, it is at risk. State load-bearing facts in server-rendered text.
 
-The check: `llms.txt` exists and lists every canonical page; robots.txt allow-lists the AI user-agents and references the sitemap; the facts an engine would quote appear in server-rendered HTML, not only in images or JS.
+The check: `llms.txt` exists and lists every canonical page; robots.txt does not block the AI user-agents and references the sitemap; the facts an engine would quote appear in server-rendered HTML, not only in images or JS.
 
 ### Canonical Tag
 

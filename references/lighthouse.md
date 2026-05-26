@@ -147,7 +147,7 @@ Lighthouse runs the axe-core ruleset. Failing any rule drops the score below 100
 | `geolocation-on-start` | Geolocation requested without user gesture | Same. |
 | `paste-preventing-inputs` | `onpaste="return false"` | Remove. Users must be able to paste. |
 | `inspector-issues` | DevTools-flagged issues | Open Issues panel, fix each. |
-| `csp-xss` | Missing or weak CSP | Add a Content-Security-Policy. Prefer per-request nonces for inline scripts on a dynamic server. On static hosting (no server to mint nonces), see the CSP-and-hydration note below: allow `'unsafe-inline'` for `script-src` while keeping `object-src`, `base-uri`, and `frame-ancestors` strict. |
+| `csp-xss` | Missing or weak CSP | Add a Content-Security-Policy. Prefer per-request nonces for inline scripts on a dynamic server. On static hosting (no server to mint nonces), prefer build-time script hashes; see the CSP-and-hydration note below, and treat `'unsafe-inline'` for `script-src` as an explicit fallback only when hashes are impractical, while keeping `object-src`, `base-uri`, and `frame-ancestors` strict. |
 | `valid-source-maps` | Source maps not served or not valid | Serve `.map` files for first-party JS to aid debugging (consider whether this exposes intellectual property). |
 | `no-unload-listeners` | `unload` event listener | Replace with `pagehide` or `visibilitychange`. |
 | `deprecations` | Deprecated API used | Replace per the deprecation message. |
