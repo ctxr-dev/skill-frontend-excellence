@@ -345,7 +345,7 @@ Map these tokens for both light and dark mode. Components reference tokens, neve
 - Background `inert` or `aria-hidden`.
 - Backdrop scrim 40-60% black for legibility.
 - Animate from trigger when possible (scale + fade).
-- Scroll-lock without a sideways jump: when you set `overflow: hidden` on the body to lock background scroll, the vertical scrollbar disappears and the page widens by its width, shifting fixed and centered content sideways. Reserve that width: `const gap = window.innerWidth - document.documentElement.clientWidth; body.style.paddingRight = gap + "px"`. Restore `overflow` and `paddingRight` on close. The gap is 0 on overlay-scrollbar systems, so this is safe everywhere.
+- Scroll-lock without a sideways jump: when you set `overflow: hidden` on the body to lock background scroll, the vertical scrollbar disappears and the page widens by its width, shifting fixed and centered content sideways. Reserve that width: `const gap = window.innerWidth - document.documentElement.clientWidth; document.body.style.paddingRight = gap + "px"`. Restore `overflow` and `paddingRight` on close. The gap is 0 on overlay-scrollbar systems, so this is safe everywhere.
 
 ### Sheet / drawer
 

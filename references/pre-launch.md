@@ -210,7 +210,7 @@ Per breakpoint:
 - [ ] HTTPS, no mixed content
 - [ ] No render-blocking content critical to indexing
 - [ ] Content-and-markup sweep over the built HTML returns clean: one H1 per page, title and description in range (rendered length), self-referencing canonical, OG tags, every JSON-LD parseable, every image has alt, no duplicate ids, no orphan pages (except an error page).
-- [ ] If AI discovery matters: `llms.txt` exists and is complete, robots.txt allow-lists AI crawlers, load-bearing facts are server-rendered.
+- [ ] If AI discovery matters: `llms.txt` exists and is complete, robots.txt does not block major AI crawlers (and any dedicated user-agent group repeats all disallows), load-bearing facts are server-rendered.
 
 ## 10. State Coverage
 

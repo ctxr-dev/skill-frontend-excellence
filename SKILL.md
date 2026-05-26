@@ -179,7 +179,7 @@ A condensed view. Every rule has a longer treatment in the references.
 24. **Internal linking with descriptive anchor text.** No "click here". No orphan pages.
 25. **`robots: index, follow` on indexable pages**, `noindex` on private, search-result, or duplicate pages.
 26. **XML sitemap lists only canonical, indexable, 200-status URLs**, referenced from robots.txt.
-27. **AI answer-engine readiness.** Ship an `llms.txt` page index (and optionally an `llms-full.txt` of quotable facts), allow-list the AI crawler user-agents in robots.txt, and keep load-bearing facts in server-rendered text. Generative search reads and cites the rendered HTML and valid structured data, not images or client-only JS.
+27. **AI answer-engine readiness.** Ship an `llms.txt` page index (and optionally an `llms-full.txt` of quotable facts), ensure the AI crawler user-agents are not blocked in robots.txt (a dedicated named group is needed only when it repeats your disallows, since it replaces the `*` group), and keep load-bearing facts in server-rendered text. Generative search reads and cites the rendered HTML and valid structured data, not images or client-only JS.
 28. **Never fabricate structured data.** Emit `aggregateRating`, `review`, `sameAs`, and `SearchAction` only when each is backed by something real (real reviews, real profiles, a working search endpoint). Every JSON-LD value must be derivable from visible content.
 
 ### UI/UX (the levers that move perceived quality)
