@@ -69,6 +69,8 @@ For icon-only buttons that look smaller, expand the hit area:
 }
 ```
 
+Apply the 44px (or 48px) minimum to STANDALONE controls: buttons, toggles, menu triggers, icon buttons, form controls, and call-to-action links. Inline text links are different. Under WCAG 2.5.8 (target size, AA, 24px), links inside a sentence, breadcrumb trails, and footer text-link lists are exempt from the larger target size because they flow with text. Do not inflate them to 44px tall: a 44px breadcrumb row or 44px in-prose link reads as broken. Give inline links a small comfortable hit area (a little vertical padding) and reserve the strict 44px for standalone controls.
+
 ### Spacing between targets
 
 Minimum 8 px gap between adjacent interactive targets. This prevents mistaps on touch and gives focus rings room to breathe.
@@ -99,6 +101,8 @@ Touch devices skip hover. Don't put critical info in a hover-only tooltip.
 ### Press feedback timing
 
 Visual response within 80-150ms of press. Below 80ms feels disconnected (too instant). Above 200ms feels laggy.
+
+- On mobile, suppress the default grey tap-highlight flash once, globally: `:where(a, button, summary, [role="button"], [tabindex]) { -webkit-tap-highlight-color: transparent; }`. The `:focus-visible` ring (which you already provide) is the intended affordance; the native flash just looks unfinished. Do this only when a proper focus style exists.
 
 ### Click vs tap vs hover
 
@@ -341,6 +345,7 @@ Map these tokens for both light and dark mode. Components reference tokens, neve
 - Background `inert` or `aria-hidden`.
 - Backdrop scrim 40-60% black for legibility.
 - Animate from trigger when possible (scale + fade).
+- Scroll-lock without a sideways jump: when you set `overflow: hidden` on the body to lock background scroll, the vertical scrollbar disappears and the page widens by its width, shifting fixed and centered content sideways. Reserve that width: `const gap = window.innerWidth - document.documentElement.clientWidth; document.body.style.paddingRight = gap + "px"`. Restore `overflow` and `paddingRight` on close. The gap is 0 on overlay-scrollbar systems, so this is safe everywhere.
 
 ### Sheet / drawer
 
@@ -354,6 +359,8 @@ Map these tokens for both light and dark mode. Components reference tokens, neve
 - Tooltip: hover-reveal of supplementary info. Plain text. No interactive content.
 - Popover: click-reveal of richer content. Can contain interactive elements.
 - Both must be keyboard-accessible and dismissible (Esc, click outside).
+
+Wire BOTH dismissal paths on every menu, popover, and disclosure: Escape, and a pointer outside the element. Use `pointerdown` (not `click`) for the outside-dismiss listener: it fires before focus moves and before a `click` that might re-toggle the trigger, and it is more reliable on touch. Add the listener only while the overlay is open and remove it on close. Escape returns focus to the trigger.
 
 ### Toast / snackbar
 

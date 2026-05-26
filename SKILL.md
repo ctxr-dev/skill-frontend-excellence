@@ -68,7 +68,7 @@ Detailed guidance lives in `references/`. Load the relevant file when the work t
 | [Lighthouse mastery](references/lighthouse.md) | Running a Lighthouse audit, interpreting scores, fixing specific failing audits, setting up CI gates |
 | [Performance deep dive](references/performance.md) | Optimizing assets, JS execution, hydration, render strategy, network, caching, fonts, images |
 | [Accessibility mastery](references/accessibility.md) | Semantic HTML, ARIA, keyboard, focus, screen reader, contrast, dynamic type, reduced motion |
-| [SEO playbook](references/seo.md) | Meta tags, headings, structured data, canonicals, sitemaps, robots, internal linking, content quality |
+| [SEO playbook](references/seo.md) | Meta tags, headings, structured data, canonicals, sitemaps, robots, internal linking, content quality, AI answer-engine readiness (AEO/GEO), dynamic OG image generation |
 | [UI/UX principles](references/ui-ux.md) | Touch targets, navigation, density, hover/press/focus states, hierarchy, empty/loading/error states |
 | [Design aesthetics](references/design.md) | Typography, color theory, spacing, composition, atmosphere, dark/light parity, avoiding AI slop |
 | [Responsive layout](references/responsive.md) | Breakpoints, mobile-first, container queries, fluid typography, safe areas, viewport units |
@@ -141,7 +141,7 @@ When the work is auditing or polishing an existing multi-page site, **read [audi
 18. **Deliverables**: per-page checklist, widget inventory, before-and-after screenshots, validation summary.
 19. **Final Acceptance Gate**: 16-item binary checklist; not done until every item is yes.
 
-## Quick Reference: The 35 Highest-Leverage Rules
+## Quick Reference: The 41 Highest-Leverage Rules
 
 A condensed view. Every rule has a longer treatment in the references.
 
@@ -155,48 +155,54 @@ A condensed view. Every rule has a longer treatment in the references.
 6. **Animate only `transform` and `opacity`.** Anything that triggers layout (width/height/top/left/margin) is forbidden in animations.
 7. **Pin third-party scripts to async/defer with `fetchpriority="low"`.** Treat every third-party script as a Lighthouse hostage. Audit count and total CPU monthly.
 8. **Cache aggressively at the edge.** Static assets get immutable + 1 year. HTML gets stale-while-revalidate. API responses get the longest TTL the data allows.
+9. **Unique ids in reused components.** A component with a hardcoded DOM `id` produces duplicate ids when rendered more than once (invalid HTML, broken ARIA). Derive a per-instance id (`useId()` or equivalent) and namespace child ids.
+10. **Verify the shipped artifact.** Check copied static files and headers (a `_headers` file, robots.txt, security headers) in the BUILT output and the live response, not just source.
 
 ### Accessibility (the levers that actually move the score AND help real users)
 
-9. **Semantic HTML first; ARIA only where semantics fall short.** A `<button>` beats `<div role="button">` every time.
-10. **Contrast >= 4.5:1 for body, >= 3:1 for large text and meaningful UI graphics.** Verify in both light and dark mode separately.
-11. **Visible focus on every interactive element**, with 2-4px outline and 3:1 contrast against the surface and against the element's resting state.
-12. **One H1; sequential headings; no skipped levels; no headings used as styling hooks.**
-13. **Every input has a programmatic label.** Placeholder is not a label.
-14. **Every meaningful image has descriptive alt; every decorative image has `alt=""`.**
-15. **Keyboard parity.** Everything reachable by mouse must be reachable, operable, and visible-when-focused by keyboard.
-16. **Respect `prefers-reduced-motion`** by removing or shortening non-essential animation, never by leaving full motion in place.
+11. **Semantic HTML first; ARIA only where semantics fall short.** A `<button>` beats `<div role="button">` every time.
+12. **Contrast >= 4.5:1 for body, >= 3:1 for large text and meaningful UI graphics.** Verify in both light and dark mode separately.
+13. **Visible focus on every interactive element**, with 2-4px outline and 3:1 contrast against the surface and against the element's resting state.
+14. **One H1; sequential headings; no skipped levels; no headings used as styling hooks.**
+15. **Every input has a programmatic label.** Placeholder is not a label.
+16. **Every meaningful image has descriptive alt; every decorative image has `alt=""`.**
+17. **Keyboard parity.** Everything reachable by mouse must be reachable, operable, and visible-when-focused by keyboard.
+18. **Respect `prefers-reduced-motion`** by removing or shortening non-essential animation, never by leaving full motion in place.
 
 ### SEO (the levers that actually move the score AND drive traffic)
 
-17. **Unique, intent-matching `<title>` and `<meta name="description">` per page.** 50-60 char title, 140-160 char description.
-18. **Self-referencing canonical on every indexable page.** No conflicting canonicals between hreflang variants.
-19. **One H1 with the primary intent term used naturally.** Sequential H2/H3.
-20. **Descriptive, kebab-case, lowercase URLs without tracking params in canonical.**
-21. **JSON-LD structured data where applicable** (Organization, WebSite, BreadcrumbList, Article, FAQPage, Product, SoftwareApplication, HowTo).
-22. **Internal linking with descriptive anchor text.** No "click here". No orphan pages.
-23. **`robots: index, follow` on indexable pages**, `noindex` on private, search-result, or duplicate pages.
-24. **XML sitemap lists only canonical, indexable, 200-status URLs**, referenced from robots.txt.
+19. **Unique, intent-matching `<title>` and `<meta name="description">` per page.** 50-60 char title, 140-160 char description.
+20. **Self-referencing canonical on every indexable page.** No conflicting canonicals between hreflang variants.
+21. **One H1 with the primary intent term used naturally.** Sequential H2/H3.
+22. **Descriptive, kebab-case, lowercase URLs without tracking params in canonical.**
+23. **JSON-LD structured data where applicable** (Organization, WebSite, BreadcrumbList, Article, FAQPage, Product, SoftwareApplication, HowTo).
+24. **Internal linking with descriptive anchor text.** No "click here". No orphan pages.
+25. **`robots: index, follow` on indexable pages**, `noindex` on private, search-result, or duplicate pages.
+26. **XML sitemap lists only canonical, indexable, 200-status URLs**, referenced from robots.txt.
+27. **AI answer-engine readiness.** Ship an `llms.txt` page index (and optionally an `llms-full.txt` of quotable facts), ensure the AI crawler user-agents are not blocked in robots.txt (a dedicated named group is needed only when it repeats your disallows, since it replaces the `*` group), and keep load-bearing facts in server-rendered text. Generative search reads and cites the rendered HTML and valid structured data, not images or client-only JS.
+28. **Never fabricate structured data.** Emit `aggregateRating`, `review`, `sameAs`, and `SearchAction` only when each is backed by something real (real reviews, real profiles, a working search endpoint). Every JSON-LD value must be derivable from visible content.
 
 ### UI/UX (the levers that move perceived quality)
 
-25. **Touch targets >= 44x44pt** (iOS) or **>= 48x48dp** (Android), with 8px+ spacing between adjacent targets.
-26. **Every async action has loading -> success/error feedback within 100ms of the trigger.** Skeleton screens beat spinners after 300ms.
-27. **One primary CTA per screen.** Secondary actions visually subordinate; destructive actions visually separated.
-28. **State the empty state.** Empty lists, empty searches, and zero-data charts get a specific message, not a blank canvas.
+29. **Touch targets >= 44x44 CSS px for standalone controls** (the iOS 44pt / Android 48dp guideline), with 8px+ spacing. Inline text links (breadcrumbs, in-prose links, footer text lists) are exempt under WCAG 2.5.8; do not inflate them to 44px, it reads as broken. Reserve the large target for buttons, toggles, icon buttons, and CTAs.
+30. **Every async action has loading -> success/error feedback within 100ms of the trigger.** Skeleton screens beat spinners after 300ms.
+31. **One primary CTA per screen.** Secondary actions visually subordinate; destructive actions visually separated.
+32. **State the empty state.** Empty lists, empty searches, and zero-data charts get a specific message, not a blank canvas.
+33. **The mobile nav must work without JavaScript.** If the small-screen nav is JS-driven (a disclosure, an island, a media-gated component), ship a `<noscript>` fallback nav or render the links in static HTML and enhance, so the links exist before and without hydration.
+34. **Scroll-lock without a sideways jump.** When locking body scroll for a modal, reserve the scrollbar width as `padding-right` (`window.innerWidth - document.documentElement.clientWidth`) and restore it on close, or the page shifts when the scrollbar disappears.
 
 ### Design (the levers that move "this looks designed")
 
-29. **Pick a distinctive type pairing.** Refuse Inter + system-ui defaults. Pair a characterful display face with a refined body face. Cap to 2 families and 4 weights.
-30. **Commit to a dominant color with one or two sharp accents.** Timid, evenly-distributed palettes read as generic. Use semantic tokens, never raw hex in components.
+35. **Pick a distinctive type pairing.** Refuse Inter + system-ui defaults. Pair a characterful display face with a refined body face. Cap to 2 families and 4 weights.
+36. **Commit to a dominant color with one or two sharp accents.** Timid, evenly-distributed palettes read as generic. Use semantic tokens, never raw hex in components.
 
 ### Multi-page consistency (the levers that prevent cross-page drift)
 
-31. **Extract repeated markup at the third instance** (or at the second with clear future reuse, or at any visible drift). One source of truth or one named variant; no third option.
-32. **No page-local CSS overrides on shared widgets.** Components own their visual contract; pages adjust only what the component exposes.
-33. **Capture before-and-after screenshots at `1440x900` and `375x812` for every visible change.** Vague claims of improvement without screenshot evidence are not evidence.
-34. **Re-render every route after every fix group on shared widgets.** A global change verified on one page is not verified.
-35. **Geometry sweep returns zero issues at both audit viewports** (viewport bleed, text overflow, sub-44 targets, duplicate arrows, drawer scroll-lock, focus presence). See [defects.md](references/defects.md).
+37. **Extract repeated markup at the third instance** (or at the second with clear future reuse, or at any visible drift). One source of truth or one named variant; no third option.
+38. **No page-local CSS overrides on shared widgets.** Components own their visual contract; pages adjust only what the component exposes.
+39. **Capture before-and-after screenshots at `1440x900` and `375x812` for every visible change.** Vague claims of improvement without screenshot evidence are not evidence.
+40. **Re-render every route after every fix group on shared widgets.** A global change verified on one page is not verified.
+41. **Geometry sweep returns zero issues at both audit viewports** (viewport bleed, text overflow, sub-44 targets, duplicate arrows, drawer scroll-lock, focus presence). See [defects.md](references/defects.md).
 
 ## Self-Improvement
 
@@ -214,6 +220,7 @@ After applying this skill, before declaring work complete:
 - Did every async section reserve space?
 - Did every interactive element have visible focus and meet contrast?
 - Did the page expose unique title, description, canonical, OG, Twitter, and (where applicable) JSON-LD?
+- Did you verify the SHIPPED build output (copied headers, static files, generated images), not just the source config?
 
 For multi-page audit and polish work, also confirm:
 
@@ -221,6 +228,7 @@ For multi-page audit and polish work, also confirm:
 - Were baseline screenshots captured at `1440x900` and `375x812` before any edits?
 - Were after screenshots captured at `1440x900` and `375x812` for every changed route?
 - Did the geometry sweep return zero issues on every audited route at both viewports?
+- Did you run BOTH programmatic sweeps (geometry, and content-and-markup) on every route?
 - Did the drift collector return no unexplained differences for any shared widget family?
 - Was a per-route audit table (issues found, fixes applied, before, after) delivered with the change?
 

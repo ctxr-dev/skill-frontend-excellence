@@ -42,6 +42,10 @@ npx lighthouse "http://localhost:3001/<path>" \
 
 Verify each category. If any score drops below the bar, identify the failing audit and fix per [lighthouse.md](lighthouse.md).
 
+Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See [defects.md](defects.md) for both. A route is not signed off until both return clean.
+
+- [ ] Verify the SHIPPED artifact, not the source. Static files and headers (a `_headers` or redirects file, `robots.txt`, `sitemap.xml`, security headers, the manifest) are copied, transformed, or sometimes dropped by the build. Check them in the built output directory and, after deploy, in the live HTTP response (`curl -I https://...`), not just in the source tree. A correct source `_headers` that did not make it into the build is the classic "it works locally" header bug.
+
 ## 2. Core Web Vitals (Lab)
 
 From the same Lighthouse run, verify each metric:
@@ -112,13 +116,15 @@ Per breakpoint:
 - [ ] No horizontal scroll
 - [ ] No clipped content
 - [ ] Layout is intentional, not just fluid
-- [ ] Touch targets >= 44x44 with 8px gaps (mobile/tablet)
+- [ ] Standalone touch targets >= 44x44 with 8px gaps (mobile/tablet); inline text links are NOT inflated (WCAG 2.5.8 exception)
 - [ ] Body text >= 16px on mobile (avoids iOS auto-zoom)
 - [ ] Tables either fit, scroll horizontally, or transform to cards
 - [ ] Sidebar / nav transforms appropriately
 - [ ] Modals fit smallest viewport
 - [ ] Safe areas respected (notch, dynamic island, gesture bar)
 - [ ] `100dvh` (not `100vh`) for full-height mobile sections
+- [ ] Mobile nav works with JavaScript disabled (a `<noscript>` fallback or static links that enhance).
+- [ ] Modals and drawers lock body scroll AND compensate for scrollbar width (no sideways jump on open or close).
 
 ## 6. Theme
 
@@ -202,6 +208,8 @@ Per breakpoint:
 - [ ] Listed in sitemap.xml (if indexable)
 - [ ] HTTPS, no mixed content
 - [ ] No render-blocking content critical to indexing
+- [ ] Content-and-markup sweep over the built HTML returns clean: one H1 per page, title and description in range (rendered length), self-referencing canonical, OG tags, every JSON-LD parseable, every image has alt, no duplicate ids, no orphan pages (except an error page).
+- [ ] If AI discovery matters: `llms.txt` exists and is complete, robots.txt does not block major AI crawlers (and any dedicated user-agent group repeats all disallows), load-bearing facts are server-rendered.
 
 ## 10. State Coverage
 

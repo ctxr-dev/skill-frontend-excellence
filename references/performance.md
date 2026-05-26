@@ -201,6 +201,8 @@ Every non-trivial image needs `srcset` and `sizes`:
 </picture>
 ```
 
+When a high-resolution master exists only for a zoom, lightbox, or fullscreen view, do not ship it inline. Serve small responsive `srcset` widths (for example 640, 960, 1280) for the inline thumbnail, and load the full-resolution master only when the user opens the fullscreen view. A multi-thousand-pixel master is often hundreds of KB; serving it to a phone for a thumbnail wastes the entire image budget. The inline image and the fullscreen image are two different sources for the same asset.
+
 ### Lazy loading
 
 - `loading="lazy"` on every `<img>` and `<iframe>` below the fold.
@@ -239,6 +241,8 @@ Web fonts are one of the largest performance regressions any surface can absorb.
 <!-- Preload the critical body font, woff2 only -->
 <link rel="preload" as="font" type="font/woff2" href="/fonts/body-regular.woff2" crossorigin />
 ```
+
+Preload the asset the build actually emits, do not hardcode the filename. Build pipelines fingerprint assets (`body-regular.9f3a2c.woff2`), and the hash changes whenever the file changes. A hardcoded `<link rel="preload" href="/fonts/body-regular.woff2">` then points at a file that no longer exists: the preload silently does nothing and the LCP regresses with no error. Resolve the href from the build (import the asset and interpolate its emitted URL, or read the build manifest) so the preload always matches the shipped file. Same rule for any preloaded image or script.
 
 ```css
 @font-face {

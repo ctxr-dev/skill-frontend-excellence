@@ -279,6 +279,8 @@ For essential motion (loading spinner, video playback), keep it but consider:
 - Minimum 8 px spacing between adjacent targets.
 - For small icons, expand the hit area with padding or `::before` extension while keeping the visual size small.
 
+Apply the 44px (or 48px) minimum to STANDALONE controls: buttons, toggles, menu triggers, icon buttons, form controls, and call-to-action links. Inline text links are different. Under WCAG 2.5.8 (target size, AA, 24px), links inside a sentence, breadcrumb trails, and footer text-link lists are exempt from the larger target size because they flow with text. Do not inflate them to 44px tall: a 44px breadcrumb row or 44px in-prose link reads as broken. Give inline links a small comfortable hit area (a little vertical padding) and reserve the strict 44px for standalone controls.
+
 ## Language
 
 - `<html lang="en">` (or your locale, e.g., `lang="en-US"`, `lang="ja"`).
@@ -294,6 +296,8 @@ Three structural basics that every route must satisfy. They are cheap to verify 
 - [ ] A skip link is the first focusable element on the page, hidden until focused, jumps to `<main>`, and does not create viewport overflow while hidden.
 
 The skip-link "no overflow while hidden" requirement is the most-skipped of the three. The `position: absolute; left: -9999px` pattern works only when paired with a focus state that brings the link back on-screen without growing the page. Use the standard `.sr-only-focusable` pattern below.
+
+Progressive enhancement covers the primary nav too: a JS-driven mobile menu must leave its links reachable without JavaScript (a `<noscript>` fallback nav or static links that enhance). See [responsive.md](responsive.md), "The mobile nav must survive without JavaScript".
 
 ## Skip Links
 
