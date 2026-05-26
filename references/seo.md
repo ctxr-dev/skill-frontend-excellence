@@ -88,16 +88,19 @@ Generative search (ChatGPT, Claude, Perplexity, Google AI overviews) is now a re
 
 - Publish `/llms.txt`: a short overview of what the site is plus a flat index of the canonical pages (title and URL per line). This is the AI-era analog of a sitemap for humans-plus-models.
 - Optionally publish `/llms-full.txt`: the load-bearing facts an answer engine will quote verbatim (what the product does, the numbers, the pricing, the data model), in plain prose. Keep it consistent with the rendered pages and the structured data.
-- Make sure the major AI crawler user-agents are NOT blocked in `robots.txt`, and reference the sitemap, so models that respect robots can fetch. Add this group ALONGSIDE your existing rules (it does not replace your `User-agent: *` policy); it only matters as an explicit allow when your baseline policy would otherwise disallow these agents:
+- Make sure the major AI crawler user-agents are NOT blocked in `robots.txt`, and reference the sitemap, so models that respect robots can fetch. For most sites they are already covered by your `User-agent: *` rules, so you do NOT need a dedicated group. Mind the precedence rule: a named user-agent group fully REPLACES the `*` group for that agent (the rules do not merge), so a dedicated AI group must REPEAT every `Disallow` you still want enforced. A blanket `Allow: /` in a named group silently exposes the `/api/` or `/private/` paths your `*` group disallows. Add a dedicated group only to set DIFFERENT rules than `*` (for example to opt a model in or out), and mirror your real disallows when you do:
 
 ```
+# Only needed if these agents need DIFFERENT rules than User-agent: *.
+# A named group REPLACES the * group for that agent, so repeat your Disallows.
 User-agent: GPTBot
 User-agent: ClaudeBot
-User-agent: anthropic-ai
 User-agent: PerplexityBot
 User-agent: Google-Extended
 User-agent: CCBot
 User-agent: Applebot-Extended
+Disallow: /api/
+Disallow: /private/
 Allow: /
 
 Sitemap: https://example.com/sitemap.xml
