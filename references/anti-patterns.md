@@ -6,7 +6,7 @@ load-when:
   symptoms: [score dropped, contrast fail, duplicate id, horizontal scroll, focus trap leak, hydration mismatch]
 prereq: SKILL.md
 related: [quick-reference.md, defects.md, components.md]
-size: ~380 lines
+size: ~160 lines
 ---
 
 # Anti-Patterns Index

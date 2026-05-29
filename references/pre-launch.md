@@ -328,7 +328,7 @@ Verify the production response (`curl -I https://<host>`) carries every header b
 
 ## 18. i18n Smoke Test
 
-Full pipeline detail lives in `i18n.md` once that file lands. This gate is the launch-time subset.
+Full pipeline detail lives in [i18n.md](i18n.md). This gate is the launch-time subset.
 
 - [ ] At least one non-Latin locale (e.g., Japanese, Arabic, Hindi, Greek) renders without falling back to a system font: verify by inspecting `font-family` resolution in DevTools on a glyph in the target script
 - [ ] One RTL locale (Arabic or Hebrew) loads with mirrored navigation (logical properties for borders, padding, and icons), no layout breaks, no clipped text, no LTR-only icons that lose meaning when flipped
@@ -337,7 +337,7 @@ Full pipeline detail lives in `i18n.md` once that file lands. This gate is the l
 
 ## 19. Service Worker Kill-Switch Gate
 
-If the site ships a service worker, a deployable kill-switch is the difference between a survivable bad release and a multi-day outage. Full lifecycle guidance will live in `pwa-offline.md`.
+If the site ships a service worker, a deployable kill-switch is the difference between a survivable bad release and a multi-day outage. Full lifecycle guidance lives in [pwa-offline.md](pwa-offline.md).
 
 - [ ] A "unregister all SWs" page exists at a known stable path (e.g., `/_/unregister-sw`), is deployable independently of the SW build, and runs `navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()))` plus a `caches.keys().then(ks => ks.forEach(k => caches.delete(k)))` pass
 - [ ] The SW respects a `?nosw=1` query parameter on the entry navigation: when present, the SW does not handle the fetch (or unregisters itself), so a fresh request can bypass a broken cached shell

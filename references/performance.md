@@ -550,7 +550,7 @@ A page outside the budget is a defect, not a tradeoff.
 
 The `sandbox` attribute denies storage, navigation, and pop-ups by default and re-grants only what the embed actually needs. The `allow` attribute (Permissions Policy on the frame) gates the powerful APIs.
 
-**Isolate origins for analytics.** Serve analytics through a first-party subdomain (`analytics.your-domain`) with a separate cookie scope. Cross-link to security.md (cross-origin isolation, CSP for embedded scripts) and embed-patterns.md (embed-as-host playbook) once those files exist.
+**Isolate origins for analytics.** Serve analytics through a first-party subdomain (`analytics.your-domain`) with a separate cookie scope. See [security.md](security.md) (cross-origin isolation, CSP for embedded scripts) and [embed-patterns.md](embed-patterns.md) (embed-as-host playbook).
 
 ### List virtualization and infinite scroll
 

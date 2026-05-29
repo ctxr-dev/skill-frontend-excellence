@@ -6,7 +6,7 @@ load-when:
   symptoms: [hydration mismatch, INP regression, CLS regression, focus trap leak, horizontal scroll, viewport overflow, font swap CLS, score dropped, Lighthouse score drop]
 prereq: SKILL.md
 related: [defects.md, performance.md, observability.md, accessibility.md]
-size: ~500 lines
+size: ~325 lines
 ---
 
 # Debug Recipes
