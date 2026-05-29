@@ -1,3 +1,14 @@
+---
+title: Data Visualization
+purpose: Chart selection, axes, color, accessibility for charts and tables, Canvas vs SVG vs WebGL rubric, timezone and DST handling, annotations, streaming chart performance, geographic projections.
+load-when:
+  task-keywords: [chart, data viz, axis, legend, colorblind, Canvas, SVG, WebGL, timezone, DST]
+  symptoms: [contrast fail, slow page, slow interaction]
+prereq: SKILL.md
+related: [accessibility.md, responsive.md, motion.md, performance.md]
+size: ~555 lines
+---
+
 # Data Visualization
 
 Framework-agnostic guidance on charts, tables, and data-dense interfaces. Library-agnostic; the same principles apply to D3, Chart.js, Recharts, ECharts, Highcharts, Vega-Lite, and others.
@@ -88,6 +99,17 @@ If you reach for a chart and a table or summary number works, use the simpler th
 - Allow user to change granularity (day/week/month).
 - Show the date format consistent with the user's locale.
 
+#### Timezone and DST handling
+
+Time-series charts get timezone wrong more often than any other single thing. The discipline:
+
+- **Store every timestamp in UTC.** Server, database, transport layer, JSON payload, log line, exported CSV: all UTC. A timestamp without a timezone is a defect; a timestamp in "local server time" is a worse defect.
+- **Display in the user's local timezone.** Use the browser's `Intl.DateTimeFormat` with `timeZone` defaulting to the user's `Intl.DateTimeFormat().resolvedOptions().timeZone`. For dashboards where the timezone is meaningful (operations, finance), expose a timezone picker and persist the choice.
+- **Use ISO 8601 with a timezone offset.** `2026-03-08T07:00:00Z` (UTC) or `2026-03-08T02:00:00-05:00` (with offset) parses unambiguously in every runtime. `2026-03-08 02:00:00` (no offset) silently falls back to the local timezone, which is the local timezone of WHICHEVER MACHINE PARSES IT. That is how a server-generated timestamp ends up displayed three hours off.
+- **DST creates the "missing hour" gap.** In the US, on the spring-forward Sunday, the clock jumps from `01:59:59` to `03:00:00` local time. A bar chart bucketed by local hour has an empty `02:00` bucket. A line chart with hourly ticks shows a gap. Two strategies: bucket by UTC and label by local (the bucket boundaries are even; the labels show the jump), or bucket by local and explicitly draw the DST transition as a vertical reference line so users see why the chart looks unusual.
+- **The "extra hour" gap is the reverse.** Fall-back day has 25 hours, with `01:00` to `02:00` happening twice. Sum-by-day operations double-count that hour. Always sum from UTC.
+- **Axis ticks across DST boundaries.** A "every 6 hours" tick on a UTC-bucketed local-labelled axis lands at unfamiliar wall-clock times across DST. A "every 6 hours local" tick on a UTC axis lands at uneven UTC offsets. Pick the one that matches the user's mental model (operations: UTC ticks; analytics: local ticks).
+
 ### Number formatting
 
 - Locale-aware via `Intl.NumberFormat`.
@@ -162,6 +184,32 @@ For small datasets, label values directly on the chart instead of forcing the ey
 - Bar chart with 3-5 bars: put the value on or above each bar.
 - Line chart: put the value at the rightmost point of each line.
 - Pie chart: put values inside slices (or outside with a leader line if too small).
+
+## Annotations and Reference Lines
+
+Charts that show context (a target, a threshold, a deploy event, an anomaly) tell a story; raw data alone often does not. Five annotation types and how to layer each:
+
+- **Threshold bands.** A shaded horizontal region marking the acceptable range (SLA 99 to 100 percent, page load good zone 0 to 2.5s). Drawn as a low-opacity `<rect>` BEHIND the data marks. Label the band, not just the boundary.
+- **Target lines.** A single horizontal reference line showing the goal. Dashed, distinct color, label at the right end ("Target: 250ms"). The line sits BEHIND the data marks; the label sits ABOVE or to the side so it never overlaps.
+- **Deploy or event markers.** Vertical lines at meaningful x-values (a deploy, a campaign launch, an incident). Color and dash pattern differ from data lines. Label rotated 90 degrees along the line OR a small icon at the top with a tooltip on hover.
+- **Anomaly callouts.** A circle plus arrow plus short text pointing at a specific data point ("Spike: payment system outage"). Visible from the static chart; tooltip on hover for the full story.
+- **Range brackets.** A horizontal bracket spanning an x-axis range (a period of degraded performance, a holiday season). Label at the top of the bracket.
+
+Layering rule: data marks always on top; annotations behind. The exception is labels, which sit above data marks to stay readable. Annotations carry their own contrast budget (3:1 against the chart background) and their own color budget (distinct from any data series color). A target line that uses the same color as a data series is a defect; the eye reads them as one.
+
+Build annotations from a structured list (source of truth) so the chart and the underlying data pipeline can never disagree.
+
+## Maps and Geographic Projections
+
+Every flat map of a round Earth distorts something. The choice of projection determines what is distorted and how badly. The defect: shipping a Mercator world map for a statistical comparison and accidentally making Greenland look bigger than Africa.
+
+- **Mercator.** Preserves shape and direction; massively inflates area at high latitudes (Greenland appears the size of Africa; Russia looks larger than the entire African continent). Use ONLY for street maps and navigation, where shape and direction are the question. Never for statistical comparisons across latitudes.
+- **Equal Earth.** Preserves area; mild shape distortion. The modern default for world-scale choropleths and heatmaps. Designed in 2018 specifically for statistical maps.
+- **Albers Equal Area.** Preserves area; designed for a specific region (Albers USA, Albers Europe). The standard projection for US state-level and country-level statistical maps. Comes pre-tuned in most viz libraries.
+- **Robinson and Winkel Tripel.** Compromise projections that distort everything slightly rather than one thing badly. Robinson is the National Geographic default; Winkel Tripel is now the National Geographic Society default. Use when neither shape nor area is the primary question.
+- **Orthographic.** A view of the Earth as a sphere from a fixed viewpoint. Use for animated globe views or hero illustrations; not for analysis.
+
+Match the projection to the use case: street map, Mercator; statistical world map, Equal Earth; US statistical map, Albers USA; aesthetic globe, Orthographic. Name the projection in code (`d3.geoEqualEarth()`, not "the default projection"); the default in most libraries is Mercator, which is rarely what a statistical chart wants.
 
 ## Animation
 
@@ -295,6 +343,24 @@ For 1000+ data points:
 
 Anti-pattern: shipping 50,000 points to a `<canvas>` chart and expecting smooth interaction.
 
+### Canvas vs SVG vs WebGL: rendering rubric
+
+Pick the renderer by data-point count first, then by interaction model.
+
+| Renderer | Data point ceiling | Interaction model | Accessibility | Use when |
+|----------|-------------------|------------------|---------------|----------|
+| SVG | About 500 nodes | DOM-native: each mark is an element, click and hover are free | Each `<rect>` or `<circle>` is a DOM node, focusable, screen-reader addressable | Bar charts, small line charts, charts with rich per-mark interaction (tooltip, click-to-drill, focus-to-announce), charts that need to be inspectable in DevTools |
+| Canvas | About 100,000 points | Pixel-based: hit-testing requires a hit-region map or a quadtree; no DOM cost | Inherently inaccessible; pair with a `<table>` fallback or a `role="img"` plus `aria-label` summary | Time-series with thousands of points, scatter plots with dense clouds, heatmaps |
+| WebGL | Above 100,000 points or when shaders are needed | Pixel-based, GPU-accelerated; same hit-testing problem as Canvas plus GPU memory budget | Same accessibility problem as Canvas; same fallback story | Million-point scatter, real-time streaming dashboards with many series, anything that needs per-mark shading (instanced rendering, density estimation) |
+
+Rule of thumb:
+
+- **Under 500 marks: SVG.** The DOM tax is negligible, interaction is free, accessibility is best.
+- **500 to 100,000 marks: Canvas.** SVG starts dropping frames at hover; Canvas stays smooth. Add a quadtree for hover hit-testing.
+- **Above 100,000 marks or shader effects: WebGL.** Use a library that handles the WebGL boilerplate (deck.gl, regl-based wrappers). Expect to write your own picking pipeline.
+
+Hybrid is common: render the data layer in Canvas or WebGL for speed, render the axes, legends, and overlay annotations in SVG on top so they are accessible. The two layers share a coordinate system.
+
 ## Tables
 
 ### Anatomy
@@ -405,6 +471,38 @@ For live-updating data:
 - Don't shift other content. New rows arrive at the top with a brief highlight.
 - Allow pause/resume so users can read without flicker.
 - Show last-updated timestamp.
+
+### Streamed chart performance
+
+A chart that receives 100 messages a second from a WebSocket and re-renders on every message will pin the main thread and stutter. Four techniques to keep the chart smooth at high stream rates:
+
+- **rAF-coalesce updates.** Buffer incoming events; redraw once per `requestAnimationFrame`. The screen refreshes at 60 Hz (or 120 Hz on high-refresh displays); rendering faster than that wastes CPU and creates jank. Per frame: drain the buffer, push points into the data structure, redraw once.
+
+  ```js
+  let pending = [];
+  let scheduled = false;
+
+  socket.addEventListener('message', (event) => {
+    pending.push(JSON.parse(event.data));
+    if (!scheduled) {
+      scheduled = true;
+      requestAnimationFrame(flush);
+    }
+  });
+
+  function flush() {
+    scheduled = false;
+    for (const point of pending) ringBuffer.push(point);
+    pending = [];
+    renderChart(ringBuffer);
+  }
+  ```
+
+- **Ring buffers for fixed-size sliding windows.** A live chart shows the last N seconds or last N points. Use a ring buffer (a fixed-size array with a head pointer) so the data structure does not grow unbounded. Old points fall off the back as new points push on the front; the chart re-renders from the buffer's current view.
+- **Off-screen Canvas via OffscreenCanvas plus transfer to main.** Move the rendering work to a Web Worker. The worker holds an `OffscreenCanvas`, draws into it, and the main thread composites the result. The main thread stays responsive for user input (panning, hovering, clicking the pause button) even while data arrives at full rate.
+- **Cap update rate to display refresh.** If the data rate is 1000 messages a second and the display is 60 Hz, render at 60 Hz; throttle further (30 Hz, 15 Hz) when the chart is off-screen, in a background tab (`document.visibilityState === 'hidden'`), or when the user is interacting with a different region.
+
+The four techniques compose: rAF-coalesce caps the render rate, ring buffers cap the data size, OffscreenCanvas moves the work off-main-thread, visibility-driven throttling drops to background-rate.
 
 ## Common Data Viz Mistakes
 

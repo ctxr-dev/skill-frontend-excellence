@@ -16,8 +16,8 @@ npm install
 
 The two files you will touch:
 
-- `SKILL.md` (entry point, North Star Targets, priority stack, the 35 highest-leverage rules, multi-page polish loop)
-- `references/<topic>.md` (deep dives: lighthouse, performance, accessibility, seo, ui-ux, design, responsive, motion, forms, data-viz, pre-launch, audit-workflow, components, defects)
+- `SKILL.md` (entry point, North Star Targets, priority stack, routing tables, conflict-resolution table, render-strategy decision tree, freshness check)
+- `references/<topic>.md` (deep dives; the canonical Quick Reference rules live in `references/quick-reference.md`)
 
 After every edit, run:
 
@@ -43,6 +43,99 @@ These are strict. Failing any of them is a defect, like a failing test.
 - **Concrete thresholds win.** Prefer "contrast >= 4.5:1" over "good contrast", "<= 90 KB gzipped" over "small bundle", "44x44pt" over "comfortable touch targets".
 - **One H1 per file, sequential headings.** No skipped levels. The skill itself follows the rules it teaches.
 - **JS code samples in references are illustrations, not deliverables.** Keep each in the 30 to 50 line range; longer snippets are smelly and fragment into smaller pieces. Use only standard DOM and CSSOM APIs (`document.querySelectorAll`, `getComputedStyle`, `getBoundingClientRect`, etc.) plus standard Node modules where the snippet runs the browser (e.g., `fs`, `path`, `puppeteer`). Introduce every browser-automation snippet with the framework-neutral phrasing "Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent)". Do not name a test runner, build tool, or component library inside the snippet itself beyond the launcher line. Even when a pattern is naturally associated with one framework, the reference must phrase it as a principle plus check, not a library API.
+
+## Reference file frontmatter (required)
+
+Every file under `references/*.md` MUST start with a YAML frontmatter block. The block is part of the navigation infrastructure: a runtime agent reads it (a cheap `head -20`) to decide whether to load the rest of the file. Missing or malformed frontmatter is a defect, like a failing test.
+
+Schema:
+
+```yaml
+---
+title: Performance Deep Dive
+purpose: One or two sentences naming the file's scope. Keep it short, dense, scannable.
+load-when:
+  task-keywords: [LCP, INP, CLS, hydration, bundle, preload, Speculation Rules, BFCache, render strategy]
+  symptoms: [LCP regression, INP regression, CLS regression, score dropped, slow page]
+prereq: SKILL.md
+related: [lighthouse.md, observability.md, debug-recipes.md, build-hygiene.md]
+size: ~620 lines
+---
+```
+
+Field rules:
+
+- **`title`**: short title, capitalised, no trailing punctuation. Matches the file's H1.
+- **`purpose`**: one or two sentences. Plain prose. No em / en dashes. This is the snippet a routing agent reads first.
+- **`load-when.task-keywords`**: the canonical task vocabulary that should pull this file. PICK FROM the keyword glossary below; do not invent new keys without adding them to the glossary. Six to twelve keywords per file is the working range. Use the same key for the same concept across files (e.g., `LCP`, not `Largest Contentful Paint` in some files and `LCP` in others).
+- **`load-when.symptoms`**: the canonical regression vocabulary that should pull this file. Same picking-from-glossary rule. Three to eight symptoms per file.
+- **`prereq`**: always `SKILL.md` for now. Reserved for future tiered prereqs.
+- **`related`**: two to four sibling files most likely to be loaded with this one. Builds the connected graph; no file is a leaf. Cross-link from each file's "See also" footer to a subset of `related:`.
+- **`size`**: approximate line count, `~N lines`. The agent uses this to budget context.
+
+When you add a new reference file: place it under `references/`, give it the frontmatter, add a row to the `SKILL.md` Reference Index, and add it to the `related:` list of at least one existing file. Run `npm run validate` to confirm structural integrity.
+
+## Keyword glossary (the corpus vocabulary)
+
+The skill builds its agent-routing index from a closed vocabulary. Using the SAME word for the same concept across files is the whole point: it keeps the semantic tree consistent so an agent's substring match resolves cleanly. When you need a concept not listed, ADD it here in the same PR.
+
+### Task-keyword vocabulary
+
+Grouped by domain (the group itself is not the keyword; the items are):
+
+- **Core Web Vitals and perf**: `LCP`, `INP`, `CLS`, `TTFB`, `FCP`, `TBT`, `performance`, `hydration`, `bundle`, `preload`, `prefetch`, `Speculation Rules`, `Early Hints`, `fetchpriority`, `BFCache`, `render strategy`, `SSR`, `SSG`, `CSR`, `streaming`, `islands`, `partial hydration`, `resumable`
+- **Accessibility**: `accessibility`, `a11y`, `WCAG`, `screen reader`, `keyboard`, `focus`, `contrast`, `semantic HTML`, `ARIA`, `dynamic type`, `reduced motion`, `forced colors`, `axe`
+- **SEO**: `SEO`, `indexing`, `canonical`, `sitemap`, `robots`, `structured data`, `JSON-LD`, `AEO`, `GEO`, `llms.txt`, `hreflang`, `Open Graph`, `meta description`, `title tag`
+- **UI / UX**: `UI`, `UX`, `interaction`, `hover`, `press`, `loading state`, `error state`, `empty state`, `success state`, `modal`, `popover`, `dialog`, `drawer`, `sheet`, `menu`, `tooltip`, `snackbar`, `toast`, `breadcrumb`, `navigation`, `touch target`, `hit target`, `popover API`, `inert`
+- **Design**: `design`, `typography`, `color`, `palette`, `OKLCH`, `P3`, `wide gamut`, `spacing`, `composition`, `atmosphere`, `dark mode`, `light mode`, `brand`, `font`, `variable font`
+- **Responsive**: `responsive`, `breakpoint`, `mobile`, `tablet`, `desktop`, `container query`, `viewport`, `safe area`, `dvh`, `srcset`, `fluid typography`, `subgrid`, `scrollbar-gutter`
+- **Motion**: `motion`, `animation`, `transition`, `easing`, `View Transitions`, `scroll-driven`, `WAAPI`, `will-change`, `@starting-style`
+- **Forms**: `form`, `validation`, `autofill`, `autocomplete`, `label`, `input`, `select`, `checkbox`, `radio`, `file upload`, `constraintValidation`
+- **Data viz**: `chart`, `data viz`, `axis`, `legend`, `colorblind`, `Canvas`, `SVG`, `WebGL`, `timezone`, `DST`
+- **Pre-launch**: `pre-launch`, `checklist`, `ship`, `release`, `deployment`, `gate`, `verification`, `evidence`
+- **Audit / polish**: `audit`, `route`, `sweep`, `screenshot`, `baseline`, `capture`, `polish`, `drift`
+- **Components**: `component`, `widget`, `contract`, `extraction`, `slots`, `composition`, `Storybook`, `tokens`
+- **Defects**: `defect`, `bug`, `regression`, `geometry`, `threshold`
+- **Security**: `security`, `CSP`, `COOP`, `COEP`, `CORP`, `cross-origin isolation`, `SRI`, `Trusted Types`, `Permissions-Policy`, `Referrer-Policy`, `frame-ancestors`
+- **Observability**: `observability`, `RUM`, `monitoring`, `error capture`, `source maps`, `INP attribution`, `Reporting API`, `error boundary`, `CrUX`, `Long Animation Frames`, `LoAF`
+- **Testing**: `testing`, `visual regression`, `axe-core`, `pa11y`, `size-limit`, `bundlesize`, `lighthouse-ci`, `contract test`, `type check`
+- **Auth**: `auth`, `authentication`, `login`, `signup`, `passkey`, `WebAuthn`, `OAuth`, `magic link`, `session`, `account recovery`, `CAPTCHA`, `Turnstile`, `Storage Access API`
+- **Debug**: `debug`, `recipe`, `hydration mismatch`, `layout overflow`, `focus trap`, `font-swap CLS`
+- **Anti-patterns**: `anti-pattern`, `what to avoid`, `mistake`
+- **i18n**: `i18n`, `l10n`, `internationalization`, `localization`, `locale`, `translation`, `Intl`, `plural rules`, `bidi`, `RTL`, `mirroring`
+- **PWA / offline**: `PWA`, `offline`, `service worker`, `SW`, `install prompt`, `push`, `background sync`, `manifest`
+- **Build hygiene**: `build`, `tree-shaking`, `dependency`, `sideEffects`, `lockfile`, `dead code`, `code splitting`
+- **Embed patterns**: `embed`, `iframe`, `sandbox`, `postMessage`, `host`, `guest`, `widget`, `third-party widget`
+- **Print / email**: `print`, `email`, `@page`, `page-break`, `transactional email`, `Outlook`
+- **Quick reference**: `rule`, `quick reference`, `highest leverage`
+
+### Symptom vocabulary
+
+Use these EXACT strings (the agent matches by substring):
+
+`LCP > 2.5s`, `LCP regression`, `INP > 200ms`, `INP regression`, `CLS > 0.1`, `CLS regression`, `slow page`, `slow interaction`, `score dropped`, `Lighthouse score drop`, `bundle size grew`, `hydration mismatch`, `focus trap leak`, `duplicate id`, `horizontal scroll`, `viewport overflow`, `broken on Firefox`, `broken on Safari`, `font swap CLS`, `iOS 100vh`, `rubber-band scroll`, `third-party script slow`, `focus not visible`, `contrast fail`, `aria-hidden leak`, `inert leak`, `noindex with sitemap`, `canonical mismatch`, `consent banner CLS`, `popover not dismissing`, `scroll lock side shift`, `auth redirect loop`, `passkey not offered`, `RTL broken`, `dark mode broken`
+
+### Synonym clusters
+
+The agent gets `<concept> ↔ <abbrev>` for free via these clusters. Subagents writing prose should prefer the abbreviation in `task-keywords:` (saves frontmatter space) and either form in prose.
+
+- `LCP` / `Largest Contentful Paint`
+- `INP` / `Interaction to Next Paint`
+- `CLS` / `Cumulative Layout Shift`
+- `TTFB` / `Time to First Byte`
+- `FCP` / `First Contentful Paint`
+- `TBT` / `Total Blocking Time`
+- `SSR` / `Server-Side Rendering`
+- `SSG` / `Static Site Generation`
+- `CSR` / `Client-Side Rendering`
+- `a11y` / `accessibility`
+- `i18n` / `internationalization`
+- `l10n` / `localization`
+- `RUM` / `Real-User Monitoring`
+- `CWV` / `Core Web Vitals`
+- `BFCache` / `back/forward cache`
+- `SW` / `service worker`
+- `LoAF` / `Long Animation Frames`
 
 ## Commits
 

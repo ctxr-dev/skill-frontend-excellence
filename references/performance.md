@@ -1,3 +1,14 @@
+---
+title: Performance Deep Dive
+purpose: Core Web Vitals discipline, asset loading, render strategy, hydration, network, caching, fonts, images, INP field attribution, BFCache, list virtualization, third-party script discipline.
+load-when:
+  task-keywords: [LCP, INP, CLS, TTFB, performance, bundle, hydration, render strategy, BFCache, preload, prefetch, Speculation Rules, Early Hints, fetchpriority, LoAF]
+  symptoms: [LCP regression, INP regression, CLS regression, slow page, score dropped, bundle size grew, third-party script slow]
+prereq: SKILL.md
+related: [lighthouse.md, audit-workflow.md, defects.md, motion.md]
+size: ~650 lines
+---
+
 # Performance Deep Dive
 
 Lighthouse measures the symptoms; this document is about the underlying causes and the levers you actually pull. Framework-agnostic.
@@ -36,7 +47,7 @@ LCP is the render time of the largest text block, image, video poster, or backgr
 
 1. **Identify the LCP element.** Open DevTools -> Performance -> capture a load -> find the LCP marker. The element will be named.
 2. **If it's an image:**
-   - Serve as AVIF (primary) and WebP (fallback). Compression: AVIF q=50-65, WebP q=75-82.
+   - Serve AVIF as the 2026 default (Baseline since 2024, supported in every evergreen engine). Keep a WebP source for users on older releases, and a JPEG only as the universal `<img>` fallback. Compression: AVIF q=50-65, WebP q=75-82.
    - Use `<picture>` with type-keyed sources.
    - Set `width` and `height` (or `aspect-ratio`) to prevent CLS.
    - Add `fetchpriority="high"`.
@@ -74,6 +85,33 @@ INP is dominated by:
 5. Use CSS for state when possible (`:hover`, `:active`, `:focus-visible`, `:has()`, `:checked`, popover API) instead of JS state updates.
 6. For large lists, virtualize with libraries like TanStack Virtual or framework-native.
 7. For input fields, debounce expensive computations (search, validation) with 150-300ms debounce.
+
+**INP attribution recipe (field-side):**
+
+Lab Lighthouse cannot meaningfully score INP. Attribute it from real users instead. Two complementary observers, both sampled and shipped via `sendBeacon`:
+
+1. `PerformanceObserver` on `event` (entry type `event`) gives every interaction's duration, target, and processing time. Filter for `duration > 40ms` to keep the volume manageable.
+2. `PerformanceObserver` on `long-animation-frame` (LoAF) gives the frame that paid for the next paint, including the scripts that ran, their source URLs, and any forced-style or forced-layout work. INP is the slowest interaction, but LoAF is what made it slow.
+3. The `web-vitals/attribution` build packages both: the `onINP` handler returns `attribution` with `targetElement`, `eventTarget` (a CSS selector), `eventType`, `loadState`, and the longest LoAF script `sourceURL`. Ship that, not just the metric value.
+
+```html
+<script type="module">
+  import { onINP } from 'https://unpkg.com/web-vitals@4/attribution?module';
+  onINP((metric) => {
+    const a = metric.attribution;
+    navigator.sendBeacon('/rum/inp', JSON.stringify({
+      value: metric.value,
+      rating: metric.rating,
+      eventTarget: a.eventTarget,
+      eventType: a.eventType,
+      loadState: a.loadState,
+      longAnimationFrame: a.longAnimationFrameEntries?.[0]?.scripts?.[0]?.sourceURL,
+    }));
+  }, { reportAllChanges: false });
+</script>
+```
+
+The two highest-signal columns in the resulting dataset are `eventTarget` (which control is slow) and `longAnimationFrame.scripts[0].sourceURL` (which script paid the cost). Together they point at the fix.
 
 ### Cumulative Layout Shift (CLS)
 
@@ -114,17 +152,22 @@ TTFB is the time from request to first byte received. Target: < 800ms mobile, < 
 
 ### Render strategies
 
-| Strategy | When to use | Pros | Cons |
-|----------|------------|------|------|
-| Static (SSG) | Content that rarely changes per request | Cheapest, fastest, cacheable forever at edge | Stale until rebuild |
-| Incremental Static (ISR) | Mostly-static with periodic updates | Edge speed + freshness | Build complexity |
-| Server-rendered (SSR) | Per-request or per-user content | Always fresh | Compute cost, slower TTFB |
-| Streaming SSR | Surfaces with slow data dependencies | First byte fast, content streams in | Framework support varies |
-| Client-side (CSR / SPA) | Highly interactive, indexability not required | Rich interactions | Worst TTFB, worst SEO |
-| Islands (partial hydration) | Mostly-static with interactive widgets | Best of both worlds | Newer pattern |
-| Resumability (Qwik) | Maximum INP | Near-zero hydration cost | Newer ecosystem |
+The render-strategy decision tree (SSG, ISR, SSR, streaming SSR, CSR, islands, resumability) is promoted to SKILL.md under `Decision: Render Strategy`. Decide there first, then return here for the implementation levers.
 
-Decide per surface: when content is the same for everyone and changes infrequently, prefer SSG / ISR with islands. When content is per-request or per-user, prefer SSR or streaming SSR. Reach for full CSR / SPA only when the surface is genuinely application-like and indexability is not a concern.
+### Streaming SSR and the shell-plus-stream envelope
+
+Streaming SSR (and React Server Components on top of it) is the framework-neutral pattern that beats both classic SSR (slow TTFB) and CSR (slow LCP) when the page depends on slow data. The envelope is the same in every framework:
+
+1. The server flushes a complete HTML shell first: `<head>`, critical CSS, navigation, footer, layout containers. Nothing in the shell awaits data.
+2. The slow regions are wrapped in Suspense (or the framework's equivalent boundary) and rendered as placeholders in the shell.
+3. As each async data fetch resolves, the server streams an HTML chunk plus a tiny inline script that replaces the placeholder in-place. No client round trip.
+
+Rules that make the envelope work:
+
+- The `<head>` must not wait. No data-dependent `<title>`, `<meta>`, or canonical in the shell stream; resolve them statically per route or stream them as out-of-order chunks.
+- Suspense boundaries are budget gates. Each one is a region the user can see before the data inside it arrives, so name them per UX intent (`<Suspense>` around "Reviews", "Related products"), not per technical boundary.
+- The shell is the LCP candidate, not the streamed regions. Put the hero image in the shell; everything below the fold can stream.
+- Verify with a slow-network capture (DevTools, Slow 3G). The shell paints fast and the regions fill in; if the page is blank until everything resolves, a boundary is in the wrong place.
 
 ### Hydration cost
 
@@ -206,6 +249,7 @@ When a high-resolution master exists only for a zoom, lightbox, or fullscreen vi
 ### Lazy loading
 
 - `loading="lazy"` on every `<img>` and `<iframe>` below the fold.
+- `<iframe loading="lazy">` is the cheapest single win for any page that embeds a YouTube player, a Google Map, a Twitter / X timeline, a Vimeo embed, or a third-party widget. A typical YouTube embed costs 500 KB to 1 MB plus its own JS execution; deferring it past first paint can recover 10 to 20 Lighthouse points on a content page.
 - Never on the LCP image.
 - For video, use `preload="metadata"` and lazy-load the actual video on user interaction.
 
@@ -316,6 +360,112 @@ Anti-patterns:
 - Preconnecting to 10+ origins. Pick three.
 - Preloading images that are already discovered in the HTML. Wasteful.
 
+### `fetchpriority` beyond images
+
+`fetchpriority` is a hint to the browser's resource scheduler. It applies to `<link>`, `<script>`, `<img>`, and `fetch()`. Three high-leverage uses:
+
+- `fetchpriority="high"` on the critical CSS preload (`<link rel="preload" as="style" fetchpriority="high">`) so it outranks images and fonts in the queue.
+- `fetchpriority="high"` on the hero font preload and on the critical JS module that the LCP depends on.
+- `fetchpriority="low"` on every third-party script tag, every below-the-fold image preload, and any analytics / ads `fetch()`. This tells the browser to deprioritise them behind anything that paints.
+
+The browser still decides; the hint shifts the queue. Pair with `<script async fetchpriority="low">` for third-party tags, and audit Network panel "Priority" column to confirm the hint took effect.
+
+### Speculation Rules API
+
+Speculation Rules let the page tell the browser which next-navigations to prefetch or prerender. The browser opens a hidden background page, runs it, and swaps it in instantly when the user clicks. Modern engines support it (Chrome and Edge since 2024; Safari and Firefox progressively enhancing).
+
+```html
+<script type="speculationrules">
+{
+  "prerender": [
+    { "source": "list", "urls": ["/pricing", "/docs"], "eagerness": "moderate" }
+  ],
+  "prefetch": [
+    { "source": "document", "where": { "href_matches": "/blog/*" }, "eagerness": "conservative" }
+  ]
+}
+</script>
+```
+
+Pick the rule by intent:
+
+- `prerender` runs the next page (HTML, CSS, JS) in the background. Instant navigation. Costly. Use for the two or three most likely next pages.
+- `prefetch` downloads the bytes but does not execute. Cheaper. Use for likely pages where prerender would be wasteful.
+
+`eagerness` tunes how aggressively the browser acts on the rule:
+
+- `eager`: fire as soon as the rule is parsed. Use only for one or two near-certain next pages.
+- `moderate` (default for hover / focus): fire on hover or focus on a matching link.
+- `conservative`: fire on `pointerdown`. Cheapest hint with the most user-intent signal.
+
+Anti-patterns: prerender every link (burns CPU and bandwidth, blocks BFCache), prerender pages with auth side effects in the loader (the loader runs in the prerender), prerender pages that mutate analytics on load (you will double-count).
+
+### Early Hints (HTTP 103)
+
+HTTP 103 Early Hints let the CDN send `Link: <...>; rel=preload` headers before the origin even returns the HTML. The browser starts preloading the critical CSS, hero image, and key font during what would otherwise be dead TTFB.
+
+```http
+HTTP/1.1 103 Early Hints
+Link: </css/critical.css>; rel=preload; as=style
+Link: </fonts/body.woff2>; rel=preload; as=font; type=font/woff2; crossorigin
+Link: </img/hero.avif>; rel=preload; as=image; fetchpriority=high
+```
+
+The final `200` follows with the full HTML. Major CDNs (Cloudflare, Fastly, Akamai) emit 103 either automatically from `<link rel="preload">` in the HTML or via an explicit edge directive. The win is real on slow-origin pages (200 to 400ms of LCP recovered) and zero on already-fast pages, so prioritise it where TTFB dominates LCP.
+
+### BFCache hygiene
+
+The back/forward cache (BFCache) snapshots the live page state when the user navigates away and restores it instantly on back / forward. A page that qualifies returns in under 100ms; a page that does not pays the full reload cost. For a returning user, qualifying is the single largest perceived-performance win available.
+
+Rules to qualify:
+
+- Replace `unload` listeners with `pagehide` and `visibilitychange`. Any `unload` listener disqualifies the page. The Lighthouse `no-unload-listeners` audit catches it; verify in third-party scripts too.
+- Audit `Cache-Control: no-store` on HTML responses. `no-store` disqualifies BFCache. Most pages do not need it; reserve it for genuinely sensitive routes (post-login dashboards with secrets in the HTML).
+- Close open `WebSocket` and `IndexedDB` transactions on `pagehide`. An open connection disqualifies the page in some engines.
+- Avoid `Cache-Control: no-cache` plus a redirect; the round trip defeats the purpose.
+
+Verify with the `NotRestoredReasons` API: in the `pageshow` handler, `event.notRestoredReasons` returns the structured list of blockers (with `src`, `reason`, and `url`). Ship it through RUM.
+
+```html
+<script type="module">
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) return; // BFCache hit; nothing to log
+    const reasons = (event.notRestoredReasons || {}).reasons || [];
+    if (reasons.length) {
+      navigator.sendBeacon('/rum/bfcache', JSON.stringify({
+        url: location.pathname,
+        reasons,
+      }));
+    }
+  });
+</script>
+```
+
+The Chrome DevTools Application panel ("Back / forward cache") also runs the diagnostic on demand.
+
+### Compression Dictionaries
+
+Compression Dictionaries (the `Use-As-Dictionary` and `Available-Dictionary` headers, shipping as shared Brotli dictionaries) let a repeat visitor's browser reuse the bytes of a previous response as the dictionary for the next compression. A small JS bundle update can ship as a tiny delta against the previous version's bytes.
+
+The pattern:
+
+1. Serve the first response with `Use-As-Dictionary: "<id>"`. The browser stores it.
+2. On the next response for the same resource family, the browser sends `Available-Dictionary: <id>` and the origin (or CDN) emits a shared-Brotli-compressed body keyed to that dictionary.
+3. The browser decompresses against the stored dictionary; the wire bytes drop by 70 to 95 percent on small updates.
+
+Use for high-traffic, slowly-changing assets: framework runtime bundles, design-system CSS, large JSON config blobs. Verify CDN support before relying on it (Cloudflare, Fastly, and major CDNs roll this out progressively); fall back to standard Brotli where unsupported. Pure win for repeat visitors; zero cost for first-time visitors.
+
+### ESM-only as an upgrade path
+
+A modern, evergreen-only target unlocks shipping ESM end-to-end:
+
+- `<script type="module">` everywhere; drop the nomodule pair.
+- `import maps` (`<script type="importmap">`) let the page resolve bare specifiers (`import { x } from 'lib'`) in the browser without a bundler. Pair with a CDN that serves stable, versioned modules.
+- Module workers (`new Worker(url, { type: 'module' })`) let workers share code with the main thread via `import` rather than `importScripts`.
+- Set `browserslist` to evergreen-only (`['>0.5%', 'not dead', 'not op_mini all', 'not ie 11']`) so the bundler stops emitting legacy transforms (`Symbol`, `Map`, `Promise` polyfills, `async`/`await` regenerator). Typical savings: 15 to 30 KB gzipped on the initial bundle.
+
+The upgrade path is incremental: start by setting the browserslist, then drop the nomodule pair, then introduce import maps on routes that do not need the bundler's tree-shaking. Each step is independently shippable.
+
 ### HTTP/2 and HTTP/3
 
 - HTTP/2 multiplexing means many small requests are fine. Don't over-bundle.
@@ -360,6 +510,90 @@ For each third party, record:
 4. **Move to a worker.** Use `partytown` to run analytics/ads on a Web Worker so they don't compete for the main thread.
 5. **Self-host.** Google Tag Manager and others can be proxied through your own origin to remove the extra connection.
 6. **Use a server-side equivalent.** GA4 supports server-side via Measurement Protocol; ad attribution can be server-side; A/B tests can be edge-side.
+
+### Third-party script discipline
+
+The taming playbook for any page where the third-party budget creeps:
+
+**Set the budget.** Two numbers, both enforced in CI via Lighthouse `third-party-summary`:
+
+- Count: at most 5 distinct third-party origins per page.
+- Total main-thread time: at most 250ms on the mobile profile, ideally under 150ms.
+
+A page outside the budget is a defect, not a tradeoff.
+
+**Run the monthly audit.** First Monday of the month, take a fresh Lighthouse capture of the top three traffic routes, open `third-party-summary`, list every script with its main-thread cost. For each, decide: keep, defer, sandbox, or remove. A typical month removes one and defers one.
+
+**Pick the load mode by decision matrix:**
+
+| Script intent | Loads on | How | Notes |
+|---------------|----------|-----|-------|
+| Analytics (page-view ping) | `requestIdleCallback` after `load` | `<script defer fetchpriority="low">` | Tag manager or first-party proxy. Server-side equivalents are stricter. |
+| Error tracking (Sentry, Datadog) | Page boot | `<script async fetchpriority="low">` | Must capture early errors; cannot fully defer. Keep this one, budget it. |
+| A/B test flicker-prevention | Synchronous in `<head>` | `<script>` with strict timeout | Flicker-prevention scripts blocking render are a known LCP killer; prefer server-side or edge-side experimentation. |
+| Chat / support widget | User intent (hover or click of trigger) | Dynamic `import()` on the trigger handler | Almost always defer until the user shows intent. Saves 200 to 500 KB. |
+| Ads (display) | After main content paints | `requestIdleCallback` + IntersectionObserver | Lazy-load per ad slot when it scrolls within one viewport of the user. |
+| Heavy analytics, marketing tags | Web Worker via `partytown` | `<script type="text/partytown">` | Moves main-thread cost to a worker. Verify the tag tolerates worker context (no DOM access). |
+
+**Sandbox the embed.** Third-party embeds (YouTube, Twitter / X, Vimeo, Maps, social share buttons) should ship inside an `<iframe sandbox>` with the minimum `allow-*` flags:
+
+```html
+<iframe
+  src="https://www.youtube.com/embed/<id>"
+  title="<descriptive title>"
+  loading="lazy"
+  sandbox="allow-scripts allow-same-origin allow-presentation"
+  allow="autoplay; fullscreen; picture-in-picture"
+  referrerpolicy="strict-origin-when-cross-origin"
+></iframe>
+```
+
+The `sandbox` attribute denies storage, navigation, and pop-ups by default and re-grants only what the embed actually needs. The `allow` attribute (Permissions Policy on the frame) gates the powerful APIs.
+
+**Isolate origins for analytics.** Serve analytics through a first-party subdomain (`analytics.your-domain`) with a separate cookie scope. See [security.md](security.md) (cross-origin isolation, CSP for embedded scripts) and [embed-patterns.md](embed-patterns.md) (embed-as-host playbook).
+
+### List virtualization and infinite scroll
+
+A list that ever exceeds 100 to 200 items, or any list that renders rich children (cards with images, charts), is a virtualization candidate. The cost model: 1000 DOM nodes is heavy; 10000 is broken. Lighthouse `dom-size` fails at 1500.
+
+**When to virtualize:**
+
+- The list can grow past 200 items (search results, feed, table).
+- Each row has more than 3 DOM nodes (cards, table rows with many columns, embedded media).
+- The list is the LCP or near it: a slow first render of a long list moves LCP.
+
+**Two strategies, framework-agnostic:**
+
+1. **Windowing libraries** (TanStack Virtual, `virtua`, framework-native virtualized list components). The library renders only the rows currently in the viewport plus a small overscan buffer, and recycles DOM nodes as the user scrolls. Best for very long lists, complex rows, or when you need precise control over row heights. Pay the cost in JS complexity and a small first-paint hit.
+2. **CSS `content-visibility: auto`** with `contain-intrinsic-size`. The browser itself skips render and layout for off-screen blocks. No JS. Best for medium-long lists of similar-sized blocks (article cards, comment threads).
+
+```css
+.card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 320px; /* width auto, expected height 320px */
+}
+```
+
+`contain-intrinsic-size` is the height estimate the browser uses while the card is off-screen, so it must be close to the real rendered height; otherwise the scrollbar jumps as cards render. Use the median measured height.
+
+**Infinite scroll: use IntersectionObserver and cursor pagination.**
+
+- IntersectionObserver on a sentinel element at the list's end triggers the next-page fetch. Cheap, debounced, native.
+- API uses cursor pagination (`?cursor=<opaque_id>&limit=20`), not offset (`?offset=400`). Cursors are stable across inserts; offsets are not, so the user sees duplicate or skipped rows.
+- Cache the loaded pages in memory keyed by cursor. Re-rendering on back-navigation should not refetch.
+
+**Retain scroll on back navigation.**
+
+- Persist scroll position and loaded-page set in `history.state` on every page load. On back navigation (`navigation.type === 'back_forward'` or BFCache miss), restore both.
+- Set `<html style="scroll-behavior: auto">` for the restore (smooth scroll defeats the restore).
+- A returning user landing back at item 47 of an infinite feed is one of the strongest UX signals; the absence of it (back nav drops you at item 1) is one of the loudest defects.
+
+**Accessibility of virtualized rows:**
+
+- Off-screen rows are not in the accessibility tree (that is the point), but screen readers must still know the list's structure.
+- Set `role="grid"` or `role="list"` on the container.
+- Set `aria-rowcount="<total>"` on the container (the total, not the rendered count) and `aria-rowindex="<n>"` on each rendered row (1-indexed, the row's position in the full list, not in the rendered window).
+- Keyboard navigation must work across the virtualized boundary. Up / down arrow at a window edge must trigger a scroll that loads the next row before focus moves to it; otherwise focus disappears into a recycled node.
 
 ## Performance Budgets in CI
 

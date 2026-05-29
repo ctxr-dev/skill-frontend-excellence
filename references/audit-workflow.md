@@ -1,3 +1,14 @@
+---
+title: Multi-Page Audit and Polish Workflow
+purpose: Procedural playbook for auditing an existing multi-page site against a reference and polishing it to a consistent visual bar across every route.
+load-when:
+  task-keywords: [audit, route, sweep, screenshot, baseline, capture, polish, drift, widget, component, regression]
+  symptoms: [score dropped, viewport overflow, horizontal scroll, broken on Safari, broken on Firefox, dark mode broken]
+prereq: SKILL.md
+related: [components.md, defects.md, pre-launch.md, design.md]
+size: ~470 lines
+---
+
 # Multi-Page Audit and Polish Workflow
 
 The procedural playbook for auditing an existing multi-page site against a reference and polishing it to that level of discipline. Use this when the work is not building a new page from scratch but bringing an existing surface to a consistent visual bar across every route.
@@ -65,6 +76,20 @@ Build a route list from multiple sources:
 Exclude only routes that are intentionally external, authenticated admin flows, logout or delete actions, file or mail or tel links, or fragments of pages already covered.
 
 If route generation is broken, fix missing published pages before polishing the rest of the site. A polished 404 for a page that should exist is still a failure.
+
+### Diff-driven re-audit scope
+
+On a re-audit (not a first audit), scope the route list to what the diff actually touched. Re-running every route on every PR wastes time; missing a route that the diff DID touch ships a regression.
+
+1. Get the diff: `git diff --name-only main...HEAD` (or the appropriate base).
+2. Filter to source-of-truth files: templates, components, global CSS, design tokens, layout primitives, route data, content collections. Exclude tests, fixtures, generated output, lockfiles, docs.
+3. Apply blast-radius rules:
+   - A page-level template change scopes to that page only.
+   - A shared widget edit scopes to EVERY route that imports the widget (transitively). Re-capture every route that imports the widget; do not trust "this page does not use it" without re-checking the import graph.
+   - A global token or layout primitive (a shared spacing scale, a color, a layout shell) scopes to every route.
+   - A route-data change (sitemap, route manifest, collection schema) scopes to every generated page.
+4. Resolve the import graph from the build tool's module graph (or a project script that emits one), not from grep. A grep against component names misses re-exports and aliases.
+5. The resulting re-audit set is the intersection of (routes in scope) with (routes the diff touched, transitively). Capture and sweep every route in the set at both viewports.
 
 ## Phase 3: Inventory Repeated Widgets
 
@@ -142,6 +167,19 @@ const safeName = (route) =>
 ```
 
 Adapt the script rather than rewriting it. Add route discovery, contact sheets, interactive captures, and the geometry sweep from [defects.md](defects.md) as the task requires.
+
+### Authenticated and stateful route capture
+
+Logged-in routes, multi-step flows, and screens that depend on stored state (theme, locale, feature flags, cart contents) need a capture pattern that seeds the state before screenshotting. Public-only capture misses the bulk of any real product.
+
+The pattern:
+
+1. Seed cookies, `localStorage`, and `sessionStorage` at browser launch, not via a UI flow per capture. The flow runs once to record state; every subsequent capture reuses it.
+2. Drive the multi-step flow in one capture session: navigate to login, submit credentials, wait for the post-login redirect, set any required state (select an org, accept terms, dismiss onboarding), THEN screenshot the target route.
+3. Snapshot the post-login storage with a headless driver's storage facility (e.g., Playwright's `storageState`, Puppeteer's `page.cookies()` plus `localStorage` dump) and reuse the snapshot across every authenticated capture. One login per audit, not one login per route.
+4. Refresh the snapshot when the auth schema changes or the session expires. Detect via an HTTP 401 on the first authenticated request; re-record and retry.
+5. Use a dedicated audit account (not a real user) with deterministic data: seed the database with known fixtures so the screenshots compare cleanly across runs.
+6. Tag each authenticated capture so the diff tool knows it depends on seeded state; a pixel diff against a fresh login on a different day will drift even when the UI did not change.
 
 ## Phase 5: Capture Reference
 
@@ -221,6 +259,21 @@ After a meaningful fix group:
 6. If a reusable widget changed, capture every route where the widget appears, not only the route where the defect was first noticed.
 
 Do not wait until the end to discover that a global CSS fix broke mobile.
+
+### Side-by-side diff tooling
+
+Eyeballing two screenshots in two browser tabs misses the small pixel shifts that compound. Pick the tool that matches the cadence:
+
+| Tool | Strength | Use when |
+|------|----------|----------|
+| pixelmatch | Raw pixel diff, single dependency, scriptable | One-off baseline vs after comparison; a quick local sanity check; a custom CI gate where the diff threshold is the only signal |
+| reg-suit | Git-aware visual regression, stores baselines per branch, reports diff to PR | The team wants a history of baselines tied to commits; a self-hosted alternative to Chromatic |
+| Playwright's `toMatchSnapshot` | Built into the test runner, lives next to the rest of the suite | A CI gate runs as part of an existing Playwright test job; one toolchain, one configuration; tolerable for small surfaces |
+| Chromatic | Hosted, integrates with a component playground, design-review UI for non-engineers | A design system with many stakeholders; review workflow needs comments per visual change; budget allows a paid hosted service |
+
+The decision rule: a one-off diff -> pixelmatch; a CI gate alongside other tests -> Playwright `toMatchSnapshot`; a history of baselines with PR-level diff comments and no hosted service -> reg-suit; a design-system review surface for stakeholders -> Chromatic.
+
+Whichever tool: never approve a baseline on green CI alone. A human reviews the diff (the rendered comparison images, not just the percentages) before the baseline is promoted.
 
 ## Phase 11: Programmatic Geometry Checks
 
@@ -388,6 +441,26 @@ Before final delivery, confirm every item below. This is the authoritative gate 
 - The final checklist is written and linked.
 
 If any item fails, continue fixing or clearly state the blocker. Do not present an incomplete visual pass as complete.
+
+## Audit Cadence and Ownership
+
+A one-shot audit ages. Without a cadence and a clear owner per surface, the polish bar drifts back to "fine" within a quarter. Lock in both before the audit is declared complete.
+
+### Cadence
+
+- **Every release-candidate build**: full geometry sweep, content-and-markup sweep, Lighthouse on the critical routes, axe on every route. Block the release on any new regression.
+- **Every shared-widget edit**: re-audit every route that imports the widget (per the diff-driven re-audit scope in Phase 2). Treat shared-widget PRs as cross-page changes, not local edits.
+- **Weekly drift sweep**: run the geometry sweep, the content-and-markup sweep, the drift collector, and a Lighthouse pass against a fixed set of canonical routes. Compare against the previous week's baseline. File issues for any regression that snuck in between releases.
+- **Quarterly reference comparison**: re-run Phase 16 reference-level design heuristics against the current production. The reference itself evolves; the bar is "match the reference's level of discipline today", not "match the reference from last year".
+
+### Ownership
+
+Pick ONE model and write it down. Mixed ownership produces dropped polish work.
+
+- **Route-owning team** is the owning team of every route's polish bar: the team that ships features on the route also owns its geometry sweep, its Lighthouse score, and its drift findings. Works when teams are vertically aligned to surfaces.
+- **Polish rotation** assigns a dedicated rotating engineer (or pair) to the polish backlog for a fixed period (one to two weeks). The rotation runs the weekly drift sweep, files issues against owning teams, and drives the highest-impact fixes through. Works when teams are horizontally aligned and no single team owns the visual bar.
+
+Either way, polish work is named work on the roadmap, not a "if there is time" residual. The bar will drop the moment polish is the first thing to slip.
 
 ## See Also
 

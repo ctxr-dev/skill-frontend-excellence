@@ -1,3 +1,14 @@
+---
+title: Lighthouse Mastery
+purpose: Score-driven audit playbook. Maps every common failing Lighthouse audit to root cause and concrete fix, plus CI gate wiring and field-vs-lab cross-checks.
+load-when:
+  task-keywords: [audit, lighthouse-ci, performance, CSP, SRI, Trusted Types, Permissions-Policy, COOP, COEP, CORP, source maps, CrUX, gate]
+  symptoms: [score dropped, Lighthouse score drop, LCP regression, CLS regression, INP regression, slow page]
+prereq: SKILL.md
+related: [performance.md, accessibility.md, seo.md, pre-launch.md]
+size: ~350 lines
+---
+
 # Lighthouse Mastery
 
 A complete playbook for hitting and holding the top of the Lighthouse curve. Framework-agnostic. Every audit listed below is reachable from `lighthouse --output=json` or the Chrome DevTools "Lighthouse" panel.
@@ -148,7 +159,11 @@ Lighthouse runs the axe-core ruleset. Failing any rule drops the score below 100
 | `paste-preventing-inputs` | `onpaste="return false"` | Remove. Users must be able to paste. |
 | `inspector-issues` | DevTools-flagged issues | Open Issues panel, fix each. |
 | `csp-xss` | Missing or weak CSP | Add a Content-Security-Policy. Prefer per-request nonces for inline scripts on a dynamic server. On static hosting (no server to mint nonces), prefer build-time script hashes; see the CSP-and-hydration note below, and treat `'unsafe-inline'` for `script-src` as an explicit fallback only when hashes are impractical, while keeping `object-src`, `base-uri`, and `frame-ancestors` strict. |
-| `valid-source-maps` | Source maps not served or not valid | Serve `.map` files for first-party JS to aid debugging (consider whether this exposes intellectual property). |
+| `csp-trusted-types` | CSP is set but Trusted Types is not enforced | When CSP is in place, add `require-trusted-types-for 'script'` and `trusted-types <policy-name>`. Trusted Types blocks DOM-XSS sinks (`innerHTML`, `outerHTML`, `document.write`, script `src`) unless the value passed is a `TrustedHTML` / `TrustedScript` / `TrustedScriptURL` produced by a named policy. Audit first-party code for raw sink calls; route them through a single sanitising policy. |
+| `sri` | Third-party script loaded without integrity | For any third-party `<script src>` or `<link rel="stylesheet" href>` you cannot self-host, add `integrity="sha384-<hash>" crossorigin="anonymous"`. Subresource Integrity makes the browser refuse the asset if its bytes do not match the hash, so a CDN compromise cannot inject code into your page. Pin to a specific versioned URL; SRI does not work against `latest` tags. |
+| `coop-coep-corp` | Cross-origin isolation headers missing | Set `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp`, and `Cross-Origin-Resource-Policy: same-origin` on first-party responses. Cross-origin isolation is required for `SharedArrayBuffer`, high-precision `performance.now()`, and `OffscreenCanvas` in a worker. Every cross-origin sub-resource must opt in via `Cross-Origin-Resource-Policy: cross-origin` or CORP-equivalent CORS; audit embeds and CDN-hosted assets before flipping COEP on. |
+| `permissions-policy` | Powerful APIs available to every origin | Gate `geolocation`, `camera`, `microphone`, `payment`, `usb`, `accelerometer`, `gyroscope`, `magnetometer`, and other powerful APIs via the `Permissions-Policy` response header. Default to deny (`Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), usb=()`) and opt in only the origins that actually need the capability (`geolocation=(self "https://maps.your-domain")`). Same rule applies to `<iframe allow="...">` for embeds. |
+| `valid-source-maps` | Source maps not served or not valid | Ship production source maps to your error tracker (Sentry, Datadog, Rollbar) via their private upload step; never publish `.map` files alongside the JS on the public CDN. Two acceptable patterns: (1) upload the map at build time and have the error tracker stitch stack traces server-side, with no public reference to the map; (2) keep the map on the CDN but restrict the `SourceMap:` response header (or the `//# sourceMappingURL` comment) to error-tracker IP ranges via an edge rule. Either way the public response is unsourced; only the tracker sees the symbols. |
 | `no-unload-listeners` | `unload` event listener | Replace with `pagehide` or `visibilitychange`. |
 | `deprecations` | Deprecated API used | Replace per the deprecation message. |
 
@@ -175,6 +190,38 @@ A strict `script-src 'self'` (no nonce, no inline) is the single most common way
 | `hreflang` | Invalid hreflang | Use valid codes; ensure mutual hreflang on all locale variants. |
 | `canonical` | Missing or incorrect canonical | Self-referencing canonical on the indexable URL. |
 | `structured-data` | (manual) | Validate via Rich Results Test; add JSON-LD per the schema.org type that matches the page. |
+
+## Lighthouse User Flow audits
+
+The default `npx lighthouse <url>` only scores a cold page load (Lighthouse calls this a "navigation" audit). It cannot meaningfully score INP, because INP needs a real user interaction during the page lifetime. For interactive flows, Lighthouse exposes two additional modes via the Flow API:
+
+- **Timespan**: records every Web Vitals metric during a window of arbitrary length while the user (or script) interacts. This is the only lab way to get a meaningful INP number. Use it on the slowest interaction (search submit, filter apply, modal open) and read INP from the timespan report.
+- **Snapshot**: scores the page in its current rendered state. Use it inside a multi-step flow to score a modal, a sheet, or a post-interaction state that the navigation audit cannot reach (because it loads the page fresh).
+
+The flow API is `npx lighthouse` plus a driver script. Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent):
+
+```js
+import { startFlow } from 'lighthouse';
+import puppeteer from 'puppeteer';
+
+const browser = await puppeteer.launch({ headless: 'new' });
+const page = await browser.newPage();
+const flow = await startFlow(page, { name: 'Search flow' });
+
+await flow.navigate('https://your-domain/');
+await flow.startTimespan({ name: 'Search interaction' });
+await page.click('[data-search-input]');
+await page.type('[data-search-input]', 'frontend excellence');
+await page.keyboard.press('Enter');
+await page.waitForSelector('[data-search-result]');
+await flow.endTimespan();
+await flow.snapshot({ name: 'Search results visible' });
+
+const report = await flow.generateReport();
+await browser.close();
+```
+
+The report bundles all three audits side by side. Capture during the real interaction, not a synthetic mouse event in `<head>`; the long task budget only shows up if the handler runs against the real DOM.
 
 ## Setting Up CI Gates
 
@@ -216,6 +263,40 @@ Two rules for the URL list:
 
 Run a separate mobile config with `preset: 'mobile'` (default) and lower thresholds (0.95 perf). Run both as required CI gates.
 
+### GitHub Actions wiring
+
+`treosh/lighthouse-ci-action` is the canonical pre-built action. Wire it to run on every PR, upload the HTML reports as artifacts, and post a comment back to the PR with the score deltas:
+
+```yaml
+name: Lighthouse CI
+on: [pull_request]
+jobs:
+  lhci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci && npm run build
+      - uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./lighthouserc.json
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+```
+
+`uploadArtifacts: true` attaches every HTML report to the Actions run so reviewers can open the full waterfall on a failure. `temporaryPublicStorage: true` pushes the report to LHCI's public storage and prints the URL back in the action log, which surfaces in the PR check summary; the action also adds a status check per assertion so the failing audit is visible without opening the report.
+
+For a self-hosted LHCI server (longer history retention, trend graphs, slack alerts), point `upload.target` at `lhci-server` in `lighthouserc.json` and set `LHCI_TOKEN` / `LHCI_SERVER_BASE_URL` as secrets. The local equivalent of the action is the three-command sequence:
+
+```bash
+lhci collect   # runs Lighthouse N times against the URL list
+lhci assert    # exits non-zero if any assertion fails
+lhci upload    # pushes the reports to your chosen target
+```
+
+Run this locally to reproduce CI failures before pushing.
+
 ## Diagnosing Score Drops
 
 When Lighthouse drops 5+ points between runs:
@@ -238,6 +319,17 @@ Lighthouse runs in a controlled lab. Real users see different results (CrUX, Sea
 - Web Vitals JS (`web-vitals` library): real-time field telemetry, sent to your own pipeline.
 
 Pass the lab AND the field. INP especially shows up in the field but not the lab; instrument it in production.
+
+**INP-in-CI gate via CrUX.** Lab Lighthouse cannot score INP meaningfully (no real interaction during the navigation audit). To gate INP in CI, query the CrUX API or the PageSpeed Insights API for the origin's 28-day p75 INP and fail the build if it crosses the threshold. A simple wrapper, run on a daily schedule (not per PR; CrUX updates lag deploys):
+
+```bash
+curl -s "https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=$CRUX_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"origin":"https://your-domain","metrics":["interaction_to_next_paint"]}' \
+  | jq -e '.record.metrics.interaction_to_next_paint.percentiles.p75 <= 200'
+```
+
+This catches INP regressions that lab gates cannot. Pair with the per-page Flow API timespan audit (above) for interaction-level lab gates on PRs.
 
 ## Common Misconceptions
 

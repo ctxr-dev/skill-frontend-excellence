@@ -1,3 +1,14 @@
+---
+title: Pre-Launch Checklist
+purpose: The final verification gate before any public-visible page or interface ships. One checklist, every item runs every change.
+load-when:
+  task-keywords: [pre-launch, checklist, ship, release, deployment, gate, verification, evidence, audit]
+  symptoms: [score dropped, Lighthouse score drop, consent banner CLS, font swap CLS, noindex with sitemap]
+prereq: SKILL.md
+related: [lighthouse.md, audit-workflow.md, security.md, defects.md]
+size: ~410 lines
+---
+
 # Pre-Launch Checklist
 
 The final verification gate before any public-visible page or interface is declared complete. Run every item on every change. Treat any failure as a blocking defect.
@@ -285,14 +296,62 @@ If RUM is set up:
 - [ ] Alerts fire when p75 crosses thresholds
 - [ ] Source maps uploaded for production error symbolication
 
-## 15. Documentation
+## 15. Security Headers
+
+Cross-link: full header guidance and policy authoring lives in [security.md](security.md). This section is the launch gate.
+
+Verify the production response (`curl -I https://<host>`) carries every header below. Source headers that did not make it into the build are the classic "it works locally" header bug.
+
+- [ ] `Strict-Transport-Security` set with a long `max-age` (>= 1 year), `includeSubDomains`, and `preload` once the domain is HSTS-preload-listed
+- [ ] `Content-Security-Policy` present, restrictive, no `unsafe-inline` for scripts; `frame-ancestors` set; report endpoint configured
+- [ ] `Permissions-Policy` denies camera, microphone, geolocation, payment, USB, and other powerful features the page does not use
+- [ ] `Referrer-Policy: strict-origin-when-cross-origin` (or stricter)
+- [ ] `Cross-Origin-Opener-Policy: same-origin` (required for cross-origin isolation)
+- [ ] `Cross-Origin-Embedder-Policy: require-corp` or `credentialless` (required for cross-origin isolation when high-resolution timers or SharedArrayBuffer are used)
+- [ ] `Cross-Origin-Resource-Policy: same-origin` (or `same-site` for shared subdomain assets)
+- [ ] `X-Content-Type-Options: nosniff` on every response
+
+## 16. Privacy and Consent
+
+- [ ] Cookie banner exposes a clear "Reject all" path with the same prominence as "Accept all" (no dark patterns, WCAG-readable contrast, no pre-checked non-essential categories)
+- [ ] Reject parity verified: the reject button is equally clickable, equally large, and reaches the same dismiss endpoint
+- [ ] Banner reserves its space (CLS-safe overlay): use `position: fixed` over reserved layout, or render server-side at known dimensions; verify CLS < 0.1 with the banner visible
+- [ ] `Sec-GPC: 1` request header is honoured: treat it as an opt-out signal for non-essential cookies, analytics, and ad personalisation
+- [ ] Analytics and non-essential third-party scripts load only AFTER explicit consent (or never, when `Sec-GPC: 1` arrives); verify by loading the page in a fresh profile and watching the network panel before clicking "Accept"
+
+## 17. Error-Tracking Sanity Check
+
+- [ ] Source-map upload pipeline runs in the production build and posts maps to the error tracker's private endpoint (maps NOT served from the public origin)
+- [ ] Throw a known error in production (e.g., a hidden test button that calls `throw new Error("prod-sanity-<commit-sha>")`) and confirm it lands in the error tracker within the expected window
+- [ ] Confirm the symbolicated stack trace shows original file names, original line numbers, and original function names (not minified `t.aB.x`)
+- [ ] Release tag (commit SHA or version) is attached to the captured event so it groups against the right deploy
+
+## 18. i18n Smoke Test
+
+Full pipeline detail lives in [i18n.md](i18n.md). This gate is the launch-time subset.
+
+- [ ] At least one non-Latin locale (e.g., Japanese, Arabic, Hindi, Greek) renders without falling back to a system font: verify by inspecting `font-family` resolution in DevTools on a glyph in the target script
+- [ ] One RTL locale (Arabic or Hebrew) loads with mirrored navigation (logical properties for borders, padding, and icons), no layout breaks, no clipped text, no LTR-only icons that lose meaning when flipped
+- [ ] Numbers and dates use `Intl.NumberFormat` and `Intl.DateTimeFormat` against the active locale
+- [ ] `<html lang>` and `dir` are set per route, not hardcoded to one value
+
+## 19. Service Worker Kill-Switch Gate
+
+If the site ships a service worker, a deployable kill-switch is the difference between a survivable bad release and a multi-day outage. Full lifecycle guidance lives in [pwa-offline.md](pwa-offline.md).
+
+- [ ] A "unregister all SWs" page exists at a known stable path (e.g., `/_/unregister-sw`), is deployable independently of the SW build, and runs `navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()))` plus a `caches.keys().then(ks => ks.forEach(k => caches.delete(k)))` pass
+- [ ] The SW respects a `?nosw=1` query parameter on the entry navigation: when present, the SW does not handle the fetch (or unregisters itself), so a fresh request can bypass a broken cached shell
+- [ ] The SW does NOT cache its own script with a long TTL: the SW file is served with `Cache-Control: max-age=0` (or `no-cache`), so the browser can pick up a corrected SW on the next revisit
+- [ ] The SW versioning strategy is documented (cache name carries a build id; old caches are deleted in `activate`)
+
+## 20. Documentation
 
 - [ ] Component docs updated (if applicable)
 - [ ] Storybook / playground stories cover new states
 - [ ] Design system tokens updated (if new tokens introduced)
 - [ ] README / CHANGELOG updated (if significant change)
 
-## 16. Git and Review
+## 21. Git and Review
 
 - [ ] Branch is up to date with main
 - [ ] All changes are intentional (review the diff)
@@ -303,7 +362,7 @@ If RUM is set up:
 - [ ] Type check passes
 - [ ] Build succeeds for production target
 
-## 17. Multi-Page Polish Gate
+## 22. Multi-Page Polish Gate
 
 If the change affects multiple pages or shared widgets, the polish gate must pass before launch. The full procedure lives in [audit-workflow.md](audit-workflow.md) Phase 19. The launch-relevant subset is:
 
@@ -317,7 +376,7 @@ If the change affects multiple pages or shared widgets, the polish gate must pas
 
 Treat any failure as blocking. The full Phase 19 acceptance list in [audit-workflow.md](audit-workflow.md) is authoritative when both gates apply; this section is the launch-time subset.
 
-## 18. Final Smell Test
+## 23. Final Smell Test
 
 Open the page in a fresh browser (incognito to avoid cached assets). Walk through it as a new user would. Ask yourself:
 
@@ -327,6 +386,22 @@ Open the page in a fresh browser (incognito to avoid cached assets). Walk throug
 - Would I be proud to share this URL?
 
 If "no" to any, address it before declaring complete.
+
+## 24. Evidence Manifest
+
+The single list of artefacts the PR must produce. Link every item from the PR description. Everything below must be reproducible from the PR description alone: a reviewer should be able to open the PR, follow the links, and re-run the checks without asking questions.
+
+- [ ] Lighthouse JSON for mobile: file path (e.g., `audit/lh-mob.json`), median of >= 3 runs
+- [ ] Lighthouse JSON for desktop: file path (e.g., `audit/lh-desk.json`), median of >= 3 runs
+- [ ] axe JSON for every audited route: file path (e.g., `audit/axe-<route>.json`), zero violations
+- [ ] Geometry sweep stdout: file path (e.g., `audit/geometry-<viewport>.txt`), zero issues at `1440x900` and `375x812`
+- [ ] Content-and-markup sweep stdout: file path (e.g., `audit/content-markup.txt`), prints `NO PROBLEMS`
+- [ ] Baseline screenshot directory at `1440x900` and `375x812`: file path (e.g., `audit/baseline/`)
+- [ ] After screenshot directory at `1440x900` and `375x812`: file path (e.g., `audit/after/`)
+- [ ] Per-route audit table (one row per route): issues found, fixes applied, before screenshot link, after screenshot link, format matches the table in [audit-workflow.md](audit-workflow.md) Phase 18
+- [ ] Re-run instructions: the exact commands a reviewer runs to reproduce every artefact above (build command, capture script, sweep invocations)
+
+A PR description missing any of the above is incomplete. Reviewer can decline review until the manifest is filled.
 
 ## When the Checklist Fails
 

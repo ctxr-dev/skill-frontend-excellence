@@ -1,3 +1,14 @@
+---
+title: Accessibility Mastery
+purpose: WCAG 2.2 AA discipline, semantic HTML, ARIA patterns, keyboard, screen readers, forced-colors mode, live regions, accessible drag-and-drop, combobox / listbox APG patterns.
+load-when:
+  task-keywords: [accessibility, a11y, WCAG, ARIA, screen reader, keyboard, focus, contrast, semantic HTML, forced colors, reduced motion, axe]
+  symptoms: [focus not visible, contrast fail, aria-hidden leak, inert leak, focus trap leak, duplicate id]
+prereq: SKILL.md
+related: [forms.md, motion.md, ui-ux.md, responsive.md]
+size: ~490 lines
+---
+
 # Accessibility Mastery
 
 WCAG 2.2 AA is the working bar. AAA where reasonable. Lighthouse + axe + manual keyboard + screen reader is the verification stack. Framework-agnostic.
@@ -10,6 +21,37 @@ WCAG 2.2 AA is the working bar. AAA where reasonable. Lighthouse + axe + manual 
 4. **Robust**: content must be robust enough to be interpreted by current and future user agents, including assistive technologies.
 
 Every rule below maps to one of these.
+
+## WCAG 2.2 New Success Criteria
+
+WCAG 2.2 (October 2023) added nine new success criteria. The five most commonly missed in modern web UIs:
+
+- **2.4.11 Focus Not Obscured (Minimum, AA).** When a control receives keyboard focus, it must not be entirely hidden by author-created content. The canonical failure is a sticky header, a sticky footer, or a consent overlay covering the focused element when the user Tabs to it. Verify by tabbing through the page with a sticky header and a cookie banner both visible; the focus ring must remain fully visible at every stop. The fix is usually `scroll-padding-top` matching the sticky header height, or pushing layout to leave a gutter for the banner.
+- **2.5.7 Dragging Movements (AA).** Every drag interaction must have a single-pointer alternative (a button, a keyboard shortcut, or a tap-to-pick / tap-to-drop pattern). Slider drags, draggable list reorders, kanban moves, and map pans all need a non-drag path. See "Accessible Drag-and-Drop" below.
+- **3.2.6 Consistent Help (A).** If the site offers a help mechanism (contact link, chat, FAQ search), it appears in the same relative order on every page where it appears. The footer help link cannot move to a header on one page and a sidebar on another.
+- **3.3.7 Redundant Entry (A).** Information the user already entered in the same session must be auto-filled or re-pulled (do not ask the user to retype an address across the shipping step and the billing step). Exceptions: re-entry is essential, the information has changed, or the previous answer is no longer valid.
+- **3.3.8 Accessible Authentication (Minimum, AA).** No cognitive function test (memorising a password, recognising specific characters of a previously chosen string, transcribing a CAPTCHA image) without an alternative. Passkeys, OAuth, magic links, email or SMS codes, and password-manager autofill all qualify as alternatives. See [auth.md](auth.md) for flow-level patterns.
+
+## Forced-Colors Mode
+
+Windows High Contrast and other forced-colors environments override author colors with a system palette. The browser exposes this via the `forced-colors` media query.
+
+- The system-color keywords MUST be used for any color that ships through forced-colors mode: `Canvas` (page background), `CanvasText` (body text), `LinkText` (links), `Highlight` (selected text background), `HighlightText` (selected text foreground), `ButtonText` (button text), `ButtonFace` (button background), `GrayText` (disabled text). These are CSS-spec keywords; the browser maps them to the active system theme.
+- `forced-color-adjust: none` opts an element OUT of the system palette. Use it only when the colors are genuinely meaningful (a brand logo, a chart legend swatch, a status indicator) AND you have verified contrast against `Canvas` is still adequate. Default to `auto` everywhere else.
+- Two failure surfaces dominate: SVG icons (the system palette flattens to currentColor, so an icon that depended on multiple fills disappears into one color) and custom focus rings (an `outline: 2px solid #f0f` ring becomes invisible against the user's chosen highlight color). Fix the icon by setting `fill: currentColor` plus `forced-color-adjust: auto`; fix the focus ring by adding a forced-colors fallback that uses `Highlight`.
+
+```css
+@media (forced-colors: active) {
+  .focus-ring:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  .icon { fill: CanvasText; }
+  .icon-link { fill: LinkText; }
+}
+```
+
+Verify in Edge or Chrome via DevTools Rendering, Emulate CSS media feature, `forced-colors: active`.
 
 ## Semantic HTML First
 
@@ -63,6 +105,28 @@ The native element gives you keyboard, focus, semantics, and screen reader suppo
 | Alert | `role="alert"` (implies `aria-live="assertive"`) |
 | Listbox | `role="listbox"`, `aria-activedescendant` for current option |
 | Combobox | `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-autocomplete` |
+
+### Combobox and Listbox (ARIA APG 1.2)
+
+The ARIA Authoring Practices Guide (APG 1.2) recognises three valid combobox markups. Pick one and apply it end-to-end; do not blend.
+
+1. **Combobox with editable text input + popup listbox.** `<input role="combobox" aria-expanded aria-controls="listbox-id" aria-activedescendant="option-id">` paired with a sibling `<ul role="listbox" id="listbox-id">`. The popup can be a listbox, a grid, a tree, or a dialog (declare via `aria-controls` target's role).
+2. **Combobox with editable text input + inline popup (chips, badges).** Same `role="combobox"` on the input; the popup is inline rather than overlay.
+3. **Combobox without a textbox (select replacement).** `<button role="combobox" aria-expanded aria-controls aria-haspopup="listbox">` plus the listbox. Use this when the user picks from a fixed list and does not type.
+
+`aria-autocomplete` declares the autocomplete behaviour the combobox provides:
+
+- `none`: no autocomplete; the popup may still suggest.
+- `list`: the popup filters to matches as the user types.
+- `both`: the popup filters AND the input value is autocompleted inline (the unmatched suffix is selected so the next keystroke replaces it).
+- `inline`: the input value is autocompleted inline, no popup filtering.
+
+**Active-descendant vs focus model.** Two valid keyboard models, pick one:
+
+- **Active-descendant** (preferred for combobox): DOM focus stays on the input. The visually-active option is marked via `aria-activedescendant="option-id"` on the input. Arrow keys move the active descendant; Enter commits the active descendant's value. Screen readers announce the active descendant.
+- **Focus-roving**: DOM focus moves to the active option inside the listbox. The input loses focus. This is the older pattern; works for listbox-only widgets but breaks the combobox model because the input no longer receives keystrokes.
+
+Common defects: `aria-expanded` not flipping when the popup opens; `aria-activedescendant` pointing to an id that has changed (rebuilt list) or that does not exist; `role="combobox"` on the wrapping `<div>` instead of the input or button.
 
 ### `aria-label` vs `aria-labelledby` vs `aria-describedby`
 
@@ -178,6 +242,15 @@ Implement what users expect; don't invent new patterns.
 - `role="status"` is `aria-live="polite"` + `aria-atomic="true"`.
 - `role="alert"` is `aria-live="assertive"` + `aria-atomic="true"`.
 - The element must be present in the DOM at page load for SRs to monitor it. Inserting it later sometimes fails.
+
+### Live-region timing rules
+
+Rapid-fire announcements are the most common live-region defect. The screen reader queues them, and the user hears a wall of speech or, worse, only the last one because newer updates pre-empt the queue.
+
+- **Debounce rapid updates.** A live region should announce at most once per 250 ms. For values that change faster than that (search results count, slider value, character count), wrap the write in a debouncer that coalesces intermediate states and flushes the final value.
+- **`aria-atomic="false"` for diff reads.** On long status text where only a small portion changes (a counter inside a paragraph, a timestamp at the end of a sentence), set `aria-atomic="false"` so the SR reads only the changed text node, not the entire region. Default `aria-atomic="true"` is correct for short status strings; for paragraph-length regions it produces unbearable re-reading.
+- **Queue with `aria-relevant`.** `aria-relevant="additions text"` (the default) announces inserted nodes and text changes. `aria-relevant="all"` adds removals, useful for chat-style "user left" announcements. `aria-relevant="additions"` alone suppresses text-only edits.
+- **One region per concern.** Two competing assertive regions on the same page race; the SR drops the loser. Have one assertive region for blocking errors, one polite region for status. More regions, more lost messages.
 
 ## Heading Hierarchy
 
@@ -360,6 +433,20 @@ If you must build one (rich content, framework-managed), implement:
 - On open, focus moves to the modal (close button or first field).
 - On close, focus returns to the trigger.
 - Background is `inert` (or has `aria-hidden="true"` and `tabindex="-1"` plus `pointer-events: none`).
+
+## Accessible Drag-and-Drop
+
+WCAG 2.5.7 (Dragging Movements) requires every drag interaction to have a single-pointer alternative. The canonical keyboard pattern for a reorderable list (or kanban, or sortable grid) is "pick up, move, drop", driven by Enter, arrows, and Esc.
+
+- **Make each item a button or `tabindex="0"` listitem.** The item must receive keyboard focus directly. A draggable `<div>` with no role is not reachable.
+- **Enter (or Space) on a focused item enters "grab" mode.** Set `aria-grabbed="true"` (deprecated in ARIA 1.2 but still announced by some SRs) OR, preferred, push a sentence into a live region: "Picked up Item A. Use arrow keys to move, Enter to drop, Esc to cancel."
+- **Arrow keys move the item up or down within the list (or across columns for kanban).** Each move announces the new position via the live region: "Item A, moved to position 3 of 7."
+- **Enter (or Space) again drops the item at its current position.** Announce: "Dropped Item A at position 3."
+- **Esc cancels the drag and restores the original position.** Announce: "Cancelled. Item A returned to position 1."
+- **The pointer drag interaction stays available** for users who prefer it. Both paths land at the same end-state mutation.
+- **Touch alternative for touch-only users without a keyboard.** A long-press to grab, tap to drop pattern parallels the keyboard one. Or surface a "Move" button on each row that opens a dialog with arrow buttons.
+
+The live region drives the entire experience for SR users. A drag-and-drop without that region is functionally inaccessible even if the keyboard works.
 
 ## Common Accessibility Mistakes
 

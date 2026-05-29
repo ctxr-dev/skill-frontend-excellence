@@ -1,3 +1,14 @@
+---
+title: UI/UX Principles
+purpose: Framework-agnostic interaction patterns for modals, popovers, tooltips, navigation, hit targets, state coverage, undo, and notification timing. The functional companion to design.md.
+load-when:
+  task-keywords: [UI, UX, interaction, modal, popover, dialog, drawer, sheet, menu, tooltip, snackbar, toast, popover API, inert, touch target, hit target, navigation, loading state, error state, empty state]
+  symptoms: [popover not dismissing, scroll lock side shift, focus trap leak, focus not visible, inert leak, rubber-band scroll]
+prereq: SKILL.md
+related: [design.md, accessibility.md, forms.md, motion.md]
+size: ~620 lines
+---
+
 # UI/UX Principles
 
 Framework-agnostic patterns for interfaces that feel professional, predictable, and considered. Distilled from Apple Human Interface Guidelines, Material Design, NN/g research, and accumulated production practice.
@@ -110,6 +121,15 @@ Visual response within 80-150ms of press. Below 80ms feels disconnected (too ins
 - **Hover**: never the only path to an action. Hover-reveal is fine for affordance but the action must also be reachable on touch (long-press, kebab menu, or always-visible).
 - **Long-press**: secondary action on touch. Always provide a non-gesture alternative.
 - **Right-click**: context menu only. Always provide an equivalent button or kebab menu.
+
+### Pointer and gesture conflicts on scroll containers
+
+A horizontal carousel inside a vertically scrolling page, a pinch-zoom canvas, or a swipeable card stack all sit on top of a scrolling document. Without explicit gesture allocation the browser will fight your handlers (scroll-jacking, page-pull-to-refresh, accidental navigation swipe).
+
+- Declare `touch-action` per gesture intent. `touch-action: pan-y` on a horizontal swiper lets the page handle vertical scroll while your code owns horizontal. `touch-action: none` disables browser gestures entirely (use only on canvas / pan-zoom surfaces).
+- `overscroll-behavior: contain` on scrolling regions stops scroll chaining into the parent (the classic "scrolled the modal, then the body scrolled too" bug).
+- `overscroll-behavior: none` on `<html>` or `<body>` suppresses pull-to-refresh and the iOS rubber-band bounce, useful for app-shell layouts. Do not apply globally on content sites; users rely on the bounce as feedback.
+- Test: scroll a horizontal reel near the top of a long page on mobile. Pull-to-refresh must not fire, vertical scroll must continue past the reel, and the reel must not steal vertical drag.
 
 ## Visual Hierarchy
 
@@ -347,6 +367,16 @@ Map these tokens for both light and dark mode. Components reference tokens, neve
 - Animate from trigger when possible (scale + fade).
 - Scroll-lock without a sideways jump: when you set `overflow: hidden` on the body to lock background scroll, the vertical scrollbar disappears and the page widens by its width, shifting fixed and centered content sideways. Reserve that width: `const gap = window.innerWidth - document.documentElement.clientWidth; document.body.style.paddingRight = gap + "px"`. Restore `overflow` and `paddingRight` on close. The gap is 0 on overlay-scrollbar systems, so this is safe everywhere.
 
+#### `<dialog>` and `inert` done right
+
+The HTML `<dialog>` element is the platform's answer to "build a modal correctly". It gives you focus management, Escape-to-close, the top layer (so z-index does not matter), and a real backdrop pseudo-element. The two modes are not interchangeable.
+
+- `dialog.showModal()` is the modal mode. The browser makes the rest of the document inert automatically (no manual `inert` needed on background), traps focus, intercepts Escape, and renders the backdrop. Use this for confirmation, login, critical data entry.
+- `dialog.show()` (or `<dialog open>`) is non-modal. No backdrop, no focus trap, the rest of the page stays interactive. Use this for a non-blocking inspector, a transient picker, an in-page side panel. Do not pair it with `inert` on the background; that would be a modal in everything but name.
+- `inert` belongs on the single ancestor that contains everything you want to silence (typically the root layout container, with `<dialog>` outside it). Do not sprinkle `inert` on individual elements one by one; you will miss focusable nodes and create the "inert leak" symptom (a stray button still tabbable behind a modal).
+- Programmatic `dialog.open = true` is a trap: it skips all the modal behavior (no backdrop, no focus, no Escape). Always call `showModal()` for modal intent.
+- Test: open the dialog, Tab through every control, confirm focus never escapes; press Escape, confirm the dialog closes and focus returns to the trigger.
+
 ### Sheet / drawer
 
 - Use for non-blocking secondary content (filters, details, settings).
@@ -361,6 +391,53 @@ Map these tokens for both light and dark mode. Components reference tokens, neve
 - Both must be keyboard-accessible and dismissible (Esc, click outside).
 
 Wire BOTH dismissal paths on every menu, popover, and disclosure: Escape, and a pointer outside the element. Use `pointerdown` (not `click`) for the outside-dismiss listener: it fires before focus moves and before a `click` that might re-toggle the trigger, and it is more reliable on touch. Add the listener only while the overlay is open and remove it on close. Escape returns focus to the trigger.
+
+#### Native HTML Popover API
+
+The `popover` attribute (Baseline 2024, broad support in Chrome, Safari, Firefox) replaces almost every hand-rolled focus-trap + click-outside + Escape combo. It is the default choice for new popovers, menus, and disclosures.
+
+```html
+<button popovertarget="filters">Filters</button>
+<div id="filters" popover>
+  <p>Filter content here.</p>
+</div>
+```
+
+What you get for free:
+
+- Top-layer rendering, so the popover sits above every stacking context. No `z-index` arms race.
+- Light-dismiss: a click outside the popover, or pressing Escape, closes it. The browser handles both.
+- Focus return: when the popover closes, focus returns to the invoker.
+- `popover="manual"` for popovers you want to control yourself (still in the top layer, no light-dismiss).
+
+Use the native API first. Reach for a JS focus-trap library only when you need a behaviour the platform does not provide (e.g., a non-closing tour step, or a popover anchored across a scrolling iframe boundary).
+
+#### CSS Anchor Positioning (progressive enhancement)
+
+CSS Anchor Positioning lets the popover position itself relative to its trigger without JavaScript. It is the upgrade path; today's support floor is Chrome 125+, with Safari and Firefox not yet shipping.
+
+```css
+.trigger { anchor-name: --filters-anchor; }
+
+#filters {
+  position-anchor: --filters-anchor;
+  top: anchor(bottom);
+  left: anchor(start);
+  position-try-fallbacks: flip-block, flip-inline;
+}
+```
+
+Progressive-enhancement framing: the popover must work without anchor positioning. Ship a JS portal + Floating UI (or equivalent positioning library) as the fallback, gate the CSS path on `@supports (anchor-name: --x)`, and treat anchor positioning as a free win on browsers that support it. Do not ship anchor-only positioning until the support floor includes Safari and Firefox stable.
+
+#### Tooltip dismissal and `aria-describedby` timing
+
+WCAG 1.4.13 (Content on Hover or Focus) requires three properties from every tooltip:
+
+- **Hoverable.** The user can move the pointer onto the tooltip itself without it disappearing. Required for users with motor difficulties and for users who need to read longer tooltips at low vision.
+- **Dismissible.** Escape (or a similarly easy gesture) closes the tooltip without moving pointer focus. Required so a tooltip never permanently obscures content under it.
+- **Persistent.** The tooltip stays open while the trigger remains focused or hovered. Do not auto-dismiss on a timer.
+
+`aria-describedby` on the trigger should point at the tooltip's `id` only while the tooltip is visible to assistive tech. Setting `aria-describedby` permanently on a trigger whose tooltip element is `display: none` results in screen readers either announcing nothing or stuttering through stale content. Add and remove the attribute as the tooltip opens and closes, or use the native Popover API and let the browser handle the relationship.
 
 ### Toast / snackbar
 
@@ -445,6 +522,17 @@ Anti-patterns:
 - Preserve user input on error. Never make them retype.
 - For 404 / 500: brand-consistent design, search box if applicable, link home, link to support, optionally a delightful detail (don't overdo).
 
+### Undo and redo beyond the toast
+
+A toast with an "Undo" button is the minimum bar for destructive actions. For surfaces where the user composes (editors, canvas tools, multi-step forms, data tables with inline edits), a real undo / redo system is part of the contract.
+
+- **Command pattern.** Every state change is a Command object with `do()` and `undo()` methods. The handler that mutates state always goes through a command, never direct mutation. This is the only design that scales past a couple of toggles.
+- **History stack.** Push executed commands onto a stack; pop and call `undo()` to reverse. Keep a forward stack of undone commands for redo. Clear the redo stack on any new command (the standard editor invariant).
+- **Global keyboard hook.** Cmd+Z (Ctrl+Z on Windows / Linux) for undo, Cmd+Shift+Z (or Ctrl+Y) for redo, listening at the document level. Skip when focus is inside a native `<input>` or `<textarea>` so the browser's built-in undo continues to handle text editing.
+- **ARIA announcement.** Use a polite live region to announce "Undid: delete row" so screen reader users get the same feedback sighted users get from the toast.
+- **Persistence boundary.** Decide whether undo crosses save (most editors say no: a save is the commit point and the history clears). State the boundary in the UI.
+- **Bound the history.** Cap at 50 to 200 commands depending on memory cost. Drop the oldest when full.
+
 ## Notifications and Badges
 
 - Use sparingly. Notification fatigue is real.
@@ -453,6 +541,15 @@ Anti-patterns:
 - Clear notifications when the user has acknowledged them.
 - Group similar notifications (5 likes from 5 people = "5 people liked your post").
 - Provide a notification preferences page.
+
+### Notification permission timing
+
+The native push permission prompt is a one-shot resource. A "Deny" verdict on first load is usually irreversible without the user digging into browser settings, and most users never do. Treat the prompt as something you spend, not something you ask.
+
+- **Never on load.** A permission prompt within the first 5 seconds of arriving is the canonical dark pattern. Browsers (Safari, Firefox) now block prompts that fire without a user gesture.
+- **After value demonstration.** Ask only after the user has taken an action that implies they want updates: subscribed to a channel, started a chat, opted into alerts, finished onboarding a long-running job. The user must see why notifications would help before you ask.
+- **In-app preview before native prompt.** Show an in-app dialog explaining the value ("Get notified when your build finishes") with a primary "Enable" button. Only then call `Notification.requestPermission()`. This pre-prompt lets you defer the irreversible browser prompt and gives the user one rejection that is not permanent.
+- **Provide a settings re-entry point.** Users who declined once need a path to re-enable. Surface notification preferences in account settings with copy that explains how to re-enable in the browser if the site was permanently blocked.
 
 ## Search
 

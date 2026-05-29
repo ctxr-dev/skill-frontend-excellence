@@ -1,3 +1,14 @@
+---
+title: SEO Playbook
+purpose: On-page and technical SEO, indexability, structured data, AI answer engines, hreflang, pagination signals, third-party-cookie deprecation impact, image and video sitemaps, CrUX mapping.
+load-when:
+  task-keywords: [SEO, indexing, canonical, sitemap, robots, structured data, JSON-LD, hreflang, Open Graph, meta description, title tag, AEO, GEO, llms.txt, CrUX, Storage Access API]
+  symptoms: [score dropped, canonical mismatch, noindex with sitemap]
+prereq: SKILL.md
+related: [lighthouse.md, performance.md, accessibility.md, observability.md]
+size: ~600 lines
+---
+
 # SEO Playbook
 
 On-page and technical SEO that hits Lighthouse 100 and earns rankings. For AI search optimization (AEO/GEO/LLMO) and programmatic SEO at scale, treat this as the foundation; specialized strategies build on top.
@@ -57,6 +68,32 @@ For large sites, split into sub-sitemaps of 50,000 URLs each, referenced from `s
 `changefreq` and `priority` are advisory; Google mostly ignores them. `lastmod` is honored when accurate.
 
 Submit to Search Console. Verify it's accessible from `robots.txt`.
+
+### Image and video sitemap extensions
+
+The sitemap protocol has dedicated extensions for image and video URLs. For sites where images or videos are first-class content (gallery, recipe, product, news, video platform), these extensions materially improve discovery in Google Images and Google Video.
+
+```xml
+<url>
+  <loc>https://your-domain.com/article/topic-deep-dive</loc>
+  <image:image>
+    <image:loc>https://your-domain.com/images/topic-hero.jpg</image:loc>
+    <image:title>Topic hero illustration</image:title>
+    <image:caption>Diagram showing the relationship between A and B.</image:caption>
+  </image:image>
+  <video:video>
+    <video:thumbnail_loc>https://your-domain.com/images/topic-thumb.jpg</video:thumbnail_loc>
+    <video:title>Topic walkthrough</video:title>
+    <video:description>Five-minute walkthrough of the topic.</video:description>
+    <video:content_loc>https://your-domain.com/video/topic.mp4</video:content_loc>
+    <video:duration>312</video:duration>
+  </video:video>
+</url>
+```
+
+Required header on the `<urlset>`: `xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"` and `xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"`. Up to 1,000 image entries per page URL. Required video fields: `thumbnail_loc`, `title`, `description`, plus one of `content_loc` or `player_loc`.
+
+Build the image and video sitemap from the SAME source the page uses (the CMS field, the structured data), so the sitemap and the rendered media stay in sync. A drifted image sitemap (pointing at images the page no longer uses) gets coverage warnings in Search Console.
 
 ### Meta Robots
 
@@ -125,6 +162,15 @@ Rules:
 - Without tracking params (utm, fbclid, gclid).
 - For paginated lists: each page canonicals to itself; do not canonicalize page 2 to page 1.
 - For filter/facet variants of a category page: canonicalize variants to the unfiltered root only when the filter doesn't change indexable content.
+
+### Pagination signals (post `rel=prev/next` deprecation)
+
+Google deprecated `rel=prev` and `rel=next` as indexing signals in 2019, but the question of how to mark up paginated lists still trips teams up. Current Google guidance:
+
+- **Self-canonical every paginated page.** Page 2 of `/blog` carries `<link rel="canonical" href="https://your-domain.com/blog?page=2">`. Do NOT canonicalize page 2 to page 1; that drops the page-2 content from the index entirely.
+- **Each paginated page is indexable.** No `noindex` on page 2 onwards. The exception is when page-N pages add no incremental value (a long-tail search result with thin matches); then `noindex` and exclude from sitemap.
+- **Internal-link signal replaces the deprecated rel attributes.** Each paginated page links to its siblings via visible "Page N of M" navigation: previous, next, first, last, and a small range around the current page. Use real `<a href>` tags, not buttons that fire JS pagination, so crawlers follow them.
+- **The canonical URL parameter shape must be stable.** `/blog?page=2` and `/blog/page/2` and `/blog/2` are different URLs to Google; pick one and 301 the others. The sitemap lists every paginated page or none (a sitemap that lists only page 1 leaves Google to discover deep pages by crawl alone).
 
 ## Titles and Descriptions
 
@@ -387,6 +433,35 @@ Rules:
 - `x-default` for the unmatched/default version.
 - Use valid BCP 47 codes (`en`, `en-US`, `de`, `pt-BR`).
 
+### URL strategy: ccTLD vs subdirectory vs subdomain
+
+Google treats each URL strategy differently for geo signals. Pick once and stay.
+
+| Strategy | Example | Geo signal | Tradeoffs |
+|----------|---------|-----------|-----------|
+| ccTLD | `your-brand.de`, `your-brand.jp` | Strongest country signal (the TLD itself geo-targets) | Highest cost (separate domain, separate SEO authority per TLD), needed for jurisdictions that require local presence |
+| Subdirectory | `your-brand.com/de/`, `your-brand.com/ja/` | No automatic country signal; set via Search Console international targeting (where still available) or via `hreflang` | Cheapest; the parent domain's authority flows down; preferred default for most sites |
+| Subdomain | `de.your-brand.com`, `ja.your-brand.com` | Treated as a separate site by Google; geo signal via Search Console settings | Mid cost; authority partially inherits; harder to maintain consistent UX |
+
+A common mistake is mixing strategies (one ccTLD, several subdirectories, and a subdomain that nobody remembers building). Audit the inventory before adding the next locale.
+
+### `Content-Language` vs `hreflang`
+
+Two related signals; they do different jobs:
+
+- `Content-Language: en-US` HTTP header (and `<meta http-equiv="content-language">` and `<html lang>`) declares the language of the CURRENT page. Useful for content-negotiation proxies and screen readers, but Google does not use it as a primary SERP-targeting signal.
+- `hreflang` declares the FULL SET of language and region variants for a page. Google uses `hreflang` to decide which variant to surface to which user in the SERP. This is the SERP-targeting signal.
+
+When the two disagree (a page has `<html lang="en">` and `hreflang="de"` pointing at itself), Google trusts `hreflang`. Set both correctly so the page is consistent.
+
+### Geo-IP redirects are a policy violation
+
+Auto-redirecting based on the user's IP location is a Google policy violation: Googlebot crawls from US IPs, so it never sees the localized variants and may de-rank or de-index them.
+
+- Show a banner offering the localized variant; do not force-redirect.
+- Persist the user's locale choice in a cookie or in the URL; the next visit honours the choice.
+- For multi-region commerce (currency, shipping), let the user pick the region from a visible control; do not infer-and-redirect.
+
 ## Mobile-Friendly
 
 - Responsive design (no separate `m.` site).
@@ -407,6 +482,45 @@ Targets (CrUX p75):
 - CLS <= 0.1: "Good"
 
 A page can have a Lighthouse 95 in the lab and still be "Needs Improvement" in CrUX if real users have slower devices/networks. Instrument the field with `web-vitals` and track p75.
+
+### Search Console Page Experience and CrUX mapping
+
+Search Console's Page Experience report and the Core Web Vitals report both pull from CrUX. Two operational details matter when you ship a fix and wait for credit:
+
+- **28-day rolling p75.** CrUX aggregates the trailing 28 days of real-user data. A fix shipped today shows up incrementally; full credit lands about 28 days later when the pre-fix window has rolled off. Plan releases accordingly: the dashboard you stare at after a ship is mostly your old code for a month.
+- **CrUX origins map to URL groups, not to individual URLs.** Search Console groups URLs by template (homepage, article, product page) and reports CWV per group. Two pages can share a group even when they look different to a human. When debugging "why is this page still Needs Improvement", check which group it belongs to in the report; the group's p75 is what triggers the warning, and the fix has to land on enough pages in the group to move the p75.
+- **The PageSpeed Insights API exposes the same CrUX data per URL and per origin.** Pull it daily into your observability stack so you can watch the trend without waiting for the Search Console UI to refresh. See [observability.md](observability.md) for the field-monitoring pipeline.
+
+## Third-Party-Cookie Deprecation Impact
+
+Chrome's third-party cookie deprecation (3PCD), reversed and re-staged through 2024 to 2026, has already moved Safari and Firefox to no-3PC by default. Plan for it as the baseline.
+
+### What breaks when 3PCs are blocked
+
+- **Cross-domain analytics.** GA4, Adobe Analytics, and similar that relied on third-party cookies to stitch user sessions across your subdomains or partner domains lose stitching. First-party measurement (server-side tagging, GA4 Measurement Protocol, first-party `_ga` cookie set on your domain) still works.
+- **A/B testing platforms.** Optimizely, VWO, and similar that set assignment cookies as third parties lose stable assignment across sessions. Move assignment to a first-party cookie set by your server, or to a server-rendered query parameter.
+- **Cross-domain embeds.** YouTube, Vimeo, Twitter, social embeds that depend on third-party cookies for logged-in state, view tracking, or recommendations degrade. The embed still loads; personalization does not.
+- **Federated auth iframes.** OAuth and SSO flows that rely on a third-party cookie to identify the user (silent re-auth, single-sign-on session bridge) break. The user has to re-authenticate. See "Storage Access API + CHIPS" below for the migration path.
+- **Cross-site retargeting and conversion attribution.** Display ads, retargeting pixels, last-click attribution across domains all lose fidelity. Use Privacy Sandbox APIs (Topics, Protected Audience, Attribution Reporting) where available.
+
+### What still works
+
+- **First-party cookies on your own origin.** The browser still trusts cookies set by the same registrable domain the user is visiting.
+- **Server-side analytics.** Logs, server-side GA4 via the Measurement Protocol, edge-collected events with a first-party cookie carrier.
+- **First-party identifiers in URLs.** Magic-link tokens, signed query parameters, server-rendered IDs.
+
+### Storage Access API and CHIPS
+
+Two browser features unlock specific cross-site cookie use cases without going back to a fully tracking world:
+
+- **Storage Access API.** A third-party iframe (your help-widget, your auth iframe) calls `document.requestStorageAccess()` in response to a user gesture; the browser prompts the user to grant access; granted access lets the iframe read and write its own cookies. Use this for federated auth iframes and consented embeds. The first-time UX is a permission prompt, so design for the friction. See [auth.md](auth.md) for the auth-flow integration.
+- **CHIPS (Cookies Having Independent Partitioned State).** A `Set-Cookie` with the `Partitioned` attribute creates a partitioned cookie: the browser stores a separate cookie per top-level site that embeds the third party. Useful for session state on a third-party widget (your support chat, your embed) that needs to remember "I am logged in on THIS host site" without cross-site tracking. The cookie is invisible to other top-level sites that embed the same third party, so it cannot be used for cross-site identification.
+
+```http
+Set-Cookie: __Host-session=abc; Path=/; Secure; HttpOnly; SameSite=None; Partitioned
+```
+
+Sites that host embedded surfaces (a SaaS dashboard that users embed into their own intranets, a chat widget) should adopt `Partitioned` cookies now; the same widget code then works across both legacy and post-3PCD browsers.
 
 ## Content Quality (E-E-A-T)
 
