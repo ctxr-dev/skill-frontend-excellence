@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-29
+
 ### Added
 
 - **Navigation infrastructure.** As the skill grows from 14 to 26 reference files, an agent must be able to pull only the 2 to 3 files matching the current task. New `SKILL.md` "Loading policy" paragraph + three routing tables: By Task (13 rows), By Symptom (15 rows), and an expanded Reference Index with per-file load-when keywords. YAML frontmatter (`title`, `purpose`, `load-when.task-keywords`, `load-when.symptoms`, `prereq`, `related`, `size`) on every reference file so an agent can do a `head -20` to decide whether to load the rest. Closed-vocabulary keyword glossary + frontmatter spec live in `CONTRIBUTING.md`.
