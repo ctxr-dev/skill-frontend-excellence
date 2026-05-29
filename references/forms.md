@@ -1,3 +1,14 @@
+---
+title: Forms and Feedback
+purpose: Input-level form discipline (label, type, validation, autocomplete), constraintValidation API, field-level abandonment analytics, address autocomplete depth. Flow-level auth lives in auth.md.
+load-when:
+  task-keywords: [form, validation, autofill, autocomplete, label, input, select, checkbox, radio, file upload, constraintValidation]
+  symptoms: [contrast fail, focus not visible, duplicate id]
+prereq: SKILL.md
+related: [accessibility.md, ui-ux.md, motion.md, auth.md]
+size: ~600 lines
+---
+
 # Forms and Feedback
 
 Framework-agnostic patterns for forms that are easy to fill, easy to recover from, and accessible. Forms are where most products earn or lose users.
@@ -87,6 +98,29 @@ Multi-form pages: prefix with the form purpose (`shipping`, `billing`):
 <input autocomplete="billing street-address" />
 ```
 
+### Address autocomplete: structured vs single-line
+
+Address forms are the second-most-abandoned form type after sign-up. Two architectural choices drive completion:
+
+- **Structured (multi-field) form.** Separate fields for `address-line1`, `address-line2`, `address-level2` (city), `address-level1` (state or region), `postal-code`, `country`. The `country` field comes FIRST so downstream fields can adapt (label changes, required-flag changes, regex changes). Browser autofill works field-by-field with the granular `autocomplete` hints. Best for shipping and billing where you need each component for downstream logic (shipping rates, tax, fraud checks).
+- **Single-line form.** One `<input autocomplete="street-address">` that holds the entire address. Easier to fill on mobile, harder to parse server-side. Use only when you do not need the components separately (a contact form, a profile note).
+
+**International address shapes vary.** Hard-coding US shape (street, city, state, zip) breaks billions of users:
+
+- Some countries (Ireland, the UAE, Hong Kong before Eircode) have no postal code at all. `postal-code` cannot be `required` for those countries.
+- Some countries (Japan, China) write the address from the largest unit to the smallest (prefecture, city, street); the field order in the UI should mirror that for the chosen country.
+- Some countries (the UK, India) use `address-level2` (city) plus `address-level1` (county or state) that the user often leaves blank; do not block submission.
+- A `country` field that adapts the downstream form is the simplest path to international correctness. Drive the label, required-flag, and regex per country from a single locale config.
+
+**`autocomplete="street-address"` granularity.** The full WHATWG list breaks `street-address` into `address-line1`, `address-line2`, `address-line3`, `address-level1` through `address-level4`, `postal-code`, `country`, `country-name`. The browser autofills at whatever level you offer; declaring `street-address` on a single line is valid AND declaring the broken-down fields is valid. Mixing the two on the same form confuses autofill; pick a level and commit.
+
+**Google Places vs browser autofill heuristics.** Two different sources of address suggestions:
+
+- **Browser autofill** uses the user's saved addresses from their browser or password manager. Cost: zero. Trigger: `autocomplete` attribute matches a known field. Best for returning customers and known users.
+- **Google Places Autocomplete (or Mapbox, HERE, Algolia Places)** uses a geocoding service to suggest addresses as the user types. Cost: per-request API fee. Trigger: explicit integration in your JS. Best for first-time customers and to catch typos.
+
+Both can coexist: let the browser autofill run on focus, then surface Places suggestions as the user keeps typing. Do NOT disable browser autofill to force Places (`autocomplete="off"` is widely ignored by browsers and even when honoured it hurts password managers).
+
 ### Native vs custom controls
 
 Native first:
@@ -115,6 +149,46 @@ Don't reinvent the date picker unless you have a year of work to invest.
 - **Re-validate on submit** as a safety net; the server validates regardless.
 - **For password strength meters**, update on keystroke since the user expects live feedback.
 - **For confirm-password**, validate when the second field loses focus.
+
+### HTML `constraintValidation` API
+
+Every form control exposes a `ValidityState` object via `input.validity`. Use it to read structured validity flags and to set custom messages, rather than hand-rolling parallel validation state.
+
+Read the validity flags:
+
+- `valueMissing`: `required` is set and the value is empty.
+- `typeMismatch`: the value does not match `type` (a `type="email"` with no `@`, a `type="url"` with no scheme).
+- `patternMismatch`: the value does not match `pattern`.
+- `tooShort` / `tooLong`: outside `minlength` / `maxlength`.
+- `rangeUnderflow` / `rangeOverflow`: outside `min` / `max`.
+- `stepMismatch`: not aligned with `step`.
+- `badInput`: the browser cannot parse the value (a non-number in `type="number"`).
+- `customError`: a previous `setCustomValidity()` call set a message.
+
+Set a custom message:
+
+```js
+const email = document.querySelector('#email');
+
+email.addEventListener('input', () => {
+  if (email.validity.typeMismatch) {
+    email.setCustomValidity('Enter an email like name@your-domain.com');
+  } else if (email.validity.valueMissing) {
+    email.setCustomValidity('Email is required');
+  } else {
+    email.setCustomValidity(''); // clear; the field is valid
+  }
+});
+
+email.form.addEventListener('submit', (event) => {
+  if (!email.form.checkValidity()) {
+    event.preventDefault();
+    email.form.reportValidity(); // shows browser UI for invalid fields
+  }
+});
+```
+
+The `invalid` event fires per field when the form fails to validate on submit. Listen for it to render your own custom error UI; never rely on the browser's default tooltip alone (it disappears as soon as the user moves focus, has no contrast guarantees, is not announced by every screen reader, and cannot be styled to match the design system). Pair the native validity flags with your own inline error message that follows the "Error placement" rules above.
 
 ### Error placement
 
@@ -282,6 +356,44 @@ For very long forms (> 10 fields):
 - Show in a fixed corner ("Saving...", "Saved", "Failed to save - retry?").
 - Use `aria-live="polite"` so screen readers announce status changes without interrupting.
 
+## Form Analytics and Field-Level Abandonment
+
+Form-level conversion ("submitted vs viewed") tells you the form is broken; field-level analytics tells you WHICH field. Instrument three events per field and compute the funnel:
+
+- **Focus.** The user reached the field. Logs which fields are even attempted.
+- **Blur with value.** The user filled the field and moved on.
+- **Blur without value.** The user touched the field, did not fill it, moved on. This is the abandonment signal.
+- **Submit attempt with this field invalid.** The user tried to submit and this field rejected.
+
+```js
+function instrumentField(field) {
+  let focusedAt = 0;
+  field.addEventListener('focus', () => {
+    focusedAt = performance.now();
+    track('field_focus', { name: field.name });
+  });
+  field.addEventListener('blur', () => {
+    const filled = field.value.trim().length > 0;
+    track('field_blur', {
+      name: field.name,
+      filled,
+      dwellMs: Math.round(performance.now() - focusedAt),
+    });
+  });
+}
+
+document.querySelectorAll('form input, form select, form textarea').forEach(instrumentField);
+```
+
+The funnel surfaces which fields kill conversion. Common findings:
+
+- A `phone` field with 40 percent blur-without-value is the abandonment culprit; consider making it optional or removing it.
+- A `birthday` field with high focus-then-leave indicates the field looks invasive; explain why you need it inline.
+- A `password` field with high "submit attempt with this field invalid" indicates the strength rule is harsh; surface the rule before submission.
+- A field with high re-focus count indicates confusion about format; add helper text.
+
+Send events via `navigator.sendBeacon` so abandonment events survive the unload. Sample if the form sees high traffic. See [observability.md](observability.md) for the RUM pipeline.
+
 ## Confirmation and Destructive Actions
 
 ### Confirm before destructive
@@ -348,6 +460,12 @@ Hide the native input, style the label as the drop zone.
 ```
 
 `role="search"` on the form is a landmark for screen readers.
+
+## Modern Auth pointer
+
+This file keeps INPUT-level concerns: the `<input>` element, its label, its validation, its autofill hint, its error message. Flow-level auth concerns live in [auth.md](auth.md): passkeys + WebAuthn (`autocomplete="webauthn"`, conditional UI), OAuth redirect UX, magic-link flow, account recovery, session-expiry handling, CAPTCHA / Turnstile placement.
+
+The split: if the question is "how should this input be marked up and validated", look here. If the question is "how should this whole sign-in flow behave", look in `auth.md`. The sign-in form example below stays in this file because it is input-shaped; the recovery story for the user who lost their second factor is flow-shaped and lives in `auth.md`.
 
 ## Login and Sign-Up
 
