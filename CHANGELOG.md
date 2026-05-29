@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-30
+
+### Changed
+
+- Pin the documented `npx @ctxr/kit` invocations to `npx @ctxr/kit@latest` so install and update resolve reliably (an unpinned scoped npx spec can fail to link its bin on newer npm).
+
 ## [0.2.0] - 2026-05-29
 
 ### Added

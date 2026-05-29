@@ -14,7 +14,7 @@ The skill encodes a single, opinionated bar (see [North Star Targets](#north-sta
 
 ```bash
 # Install into your project
-npx @ctxr/kit install @ctxr/skill-frontend-excellence
+npx @ctxr/kit@latest install @ctxr/skill-frontend-excellence
 ```
 
 Open the project in any Agent Skills-compatible harness. The skill auto-activates from its YAML frontmatter the moment a prompt touches how an interface looks, feels, moves, loads, ranks, or is interacted with. There is no slash command to invoke; the skill is content-only.

@@ -1,6 +1,6 @@
 {
   "name": "@ctxr/skill-frontend-excellence",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Agent Skills playbook (Claude Code, Codex CLI): framework-agnostic guide for shipping ultra-fast, accessible, search-friendly, visually distinctive web interfaces. Lighthouse mastery, UI/UX, design aesthetics, performance, accessibility, SEO, motion, forms, layout, data-viz, multi-page audit workflow, component standardization, geometry sweep.",
   "type": "module",
   "license": "MIT",
