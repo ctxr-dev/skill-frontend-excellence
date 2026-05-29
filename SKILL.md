@@ -22,6 +22,10 @@ Apply this skill any time the work changes how an interface **looks, feels, move
 
 Skip this skill for backend logic, infrastructure, data pipelines, or non-visual scripting.
 
+## Loading policy (read before pulling references)
+
+Each file under `references/` averages 400 to 600 lines. Loading more than three at once burns context for content you do not need. Pick the 2 to 3 files that match the current task by reading the Routing tables below (By Task, By Symptom, then Reference Index). If a table does not resolve cleanly, read the YAML frontmatter at the top of candidate files (about 15 lines each, via `head -20`) before loading the rest. Drop a reference when the current task no longer matches its purpose.
+
 ## North Star Targets
 
 Every interface should meet these bars before being considered "done". Treat any failure as a blocking defect, not a polish task.
@@ -59,59 +63,123 @@ These are the universal bar. A given project may consciously relax a budget for 
 
 Higher-priority items always block lower-priority items. Never trade contrast for aesthetics. Never trade INP for animation.
 
+### When rules conflict (tie-breakers)
+
+The Priority Stack covers the common case. Use this table when two specific rules push the other way:
+
+| Conflict | Tie-breaker |
+|---|---|
+| Animation polish vs INP budget | INP wins. An animation that drives INP over 200ms is a defect, not a polish item. |
+| Aesthetic preference vs WCAG contrast | Contrast wins. No 3:1 large-text or 4.5:1 body floor is negotiable for visual taste. |
+| LCP preload vs initial JS budget | JS budget wins. Find a smaller LCP element or defer the preload; do not blow the budget. |
+| SSR for SEO vs INP under hydration cost | Split: SSR the shell for indexability, defer islands to keep INP under 200ms. |
+| Motion polish vs `prefers-reduced-motion` | Reduced motion wins. Motion is the enhancement, not the baseline. |
+| Brand color vs dark-mode text contrast | Use a lightened accent for text on dark surfaces; brand stays for backgrounds. See `design.md`. |
+
+## Decision: Render Strategy
+
+A page lands in one of five render strategies. Choose by these axes; deep treatment in `performance.md` and `seo.md`.
+
+| If ... | Pick |
+|---|---|
+| Indexable, mostly static content, low personalisation, traffic spike resilient | **SSG** (static site generation) |
+| Indexable, per-request personalisation, dynamic data, server has compute budget | **SSR** (server-side rendering), optionally streamed |
+| Index not required, deeply interactive, app-shell experience, INP-sensitive | **CSR** (client-side rendering), with route-level code splitting |
+| Indexable, partial personalisation, want SSG for the shell with revalidation | **ISR** (incremental static regeneration) |
+| Mostly static + a few interactive widgets, want minimal JS | **Static plus islands** (partial hydration / resumability) |
+
+Decision rule of thumb: indexability first (SSG / SSR / ISR for indexable surfaces); interactivity cost second (split into islands if SSR pages run over the JS budget); fall back to CSR only when index is not required and the app shell is the product.
+
+## Routing: by task
+
+Pick the row that matches what you have been asked to do. Load the named files first; pull others only if those files point you elsewhere.
+
+| You are asked to ... | Load these files |
+|---|---|
+| Build a new page from scratch | [components.md](references/components.md), [design.md](references/design.md), [responsive.md](references/responsive.md), [performance.md](references/performance.md) |
+| Audit an existing site against a reference | [audit-workflow.md](references/audit-workflow.md), [defects.md](references/defects.md), [design.md](references/design.md) |
+| Fix a failing Lighthouse audit | [lighthouse.md](references/lighthouse.md), [performance.md](references/performance.md), [debug-recipes.md](references/debug-recipes.md) |
+| Polish visual quality on an existing page | [design.md](references/design.md), [ui-ux.md](references/ui-ux.md), [defects.md](references/defects.md) |
+| Add a form or sign-in flow | [forms.md](references/forms.md), [auth.md](references/auth.md), [accessibility.md](references/accessibility.md) |
+| Set up CI gates and pre-merge checks | [testing.md](references/testing.md), [lighthouse.md](references/lighthouse.md), [observability.md](references/observability.md) |
+| Diagnose a production issue | [observability.md](references/observability.md), [debug-recipes.md](references/debug-recipes.md), [defects.md](references/defects.md) |
+| Verify a page is done before shipping | [pre-launch.md](references/pre-launch.md), [quick-reference.md](references/quick-reference.md) |
+| Internationalise or localise a surface | [i18n.md](references/i18n.md), [responsive.md](references/responsive.md), [accessibility.md](references/accessibility.md) |
+| Harden security (CSP, headers, Trusted Types, SRI) | [security.md](references/security.md), [lighthouse.md](references/lighthouse.md), [pre-launch.md](references/pre-launch.md) |
+| Add PWA, offline, or installability | [pwa-offline.md](references/pwa-offline.md), [performance.md](references/performance.md) |
+| Embed third-party widgets or be embedded | [embed-patterns.md](references/embed-patterns.md), [security.md](references/security.md), [auth.md](references/auth.md) |
+| Print stylesheet or transactional email HTML | [print-email.md](references/print-email.md) |
+
+## Routing: by symptom
+
+Use observable problem signals to jump straight to the relevant file.
+
+| Symptom | Likely root, file to load |
+|---|---|
+| LCP > 2.5s, LCP regression | preload / `fetchpriority` / hydration cost: `performance.md` |
+| INP > 200ms, slow interaction | long task / handler / hydration: `performance.md` (INP attribution), `debug-recipes.md` |
+| CLS > 0.1, layout jump | async element not reserved: `performance.md`, `defects.md` |
+| Lighthouse SEO < 100 | `noindex` on a graded page, missing canonical: `lighthouse.md`, `seo.md` |
+| Lighthouse Best Practices < 100 | CSP violation, console errors, deprecation: `lighthouse.md`, `security.md` |
+| duplicate id warning | reused component with a hardcoded id: `components.md` |
+| scroll lock side shift | modal missing scrollbar-width compensation: `ui-ux.md`, `defects.md` |
+| hydration mismatch | server vs client divergence: `debug-recipes.md`, `performance.md` |
+| viewport overflow, horizontal scroll | bleed in a child element: `defects.md` |
+| focus trap leak, focus not visible | overlay focus management: `debug-recipes.md`, `ui-ux.md`, `accessibility.md` |
+| font swap CLS | missing `size-adjust` / metrics-override on fallback: `defects.md`, `performance.md` |
+| third-party script slow, analytics blocking | TPS / `partytown` / async-defer matrix: `performance.md`, `build-hygiene.md` |
+| broken on Firefox / Safari only | feature-support assumption, missing fallback: depends; check `motion.md`, `ui-ux.md`, `responsive.md` |
+| consent banner CLS, bounding box jumps | overlay not reserved: `seo.md`, `ui-ux.md` |
+| `aria-hidden` background still announced, inert leak | overlay applied to the wrong ancestor: `defects.md`, `ui-ux.md` |
+
 ## Reference Index
 
-Detailed guidance lives in `references/`. Load the relevant file when the work touches that domain.
+Detailed guidance lives in `references/`. Each row gives a one-line purpose plus the keywords that should pull the file.
 
-| File | Use when |
+| File | Use when (keywords) |
 |------|---------|
-| [Lighthouse mastery](references/lighthouse.md) | Running a Lighthouse audit, interpreting scores, fixing specific failing audits, setting up CI gates |
-| [Performance deep dive](references/performance.md) | Optimizing assets, JS execution, hydration, render strategy, network, caching, fonts, images |
-| [Accessibility mastery](references/accessibility.md) | Semantic HTML, ARIA, keyboard, focus, screen reader, contrast, dynamic type, reduced motion |
-| [SEO playbook](references/seo.md) | Meta tags, headings, structured data, canonicals, sitemaps, robots, internal linking, content quality, AI answer-engine readiness (AEO/GEO), dynamic OG image generation |
-| [UI/UX principles](references/ui-ux.md) | Touch targets, navigation, density, hover/press/focus states, hierarchy, empty/loading/error states |
-| [Design aesthetics](references/design.md) | Typography, color theory, spacing, composition, atmosphere, dark/light parity, avoiding AI slop |
-| [Responsive layout](references/responsive.md) | Breakpoints, mobile-first, container queries, fluid typography, safe areas, viewport units |
-| [Motion and animation](references/motion.md) | Timing, easing, principles, reduced-motion, transform-only, choreography |
-| [Forms and feedback](references/forms.md) | Validation, error placement, autofill, autosave, success/error states, multi-step flows |
-| [Data visualization](references/data-viz.md) | Chart selection, axes, legends, color, accessibility, large datasets |
-| [Pre-launch checklist](references/pre-launch.md) | Final verification gate before declaring a page complete |
-| [Multi-page audit workflow](references/audit-workflow.md) | Auditing or polishing an existing multi-page site against a reference; route-by-route capture, fix, and verify procedure |
-| [Component discipline](references/components.md) | Standardizing repeated widgets, defining component contracts, detecting drift across pages |
-| [Visual defects and geometry checks](references/defects.md) | Symptom-to-fix lookup for common visible defects and the canonical programmatic geometry sweep |
+| [lighthouse.md](references/lighthouse.md) | Lighthouse, audit, score, CI gate, csp-xss, duplicate-id, is-crawlable, score variance, user-flow |
+| [performance.md](references/performance.md) | LCP, INP, CLS, TTFB, performance, hydration, bundle, BFCache, Speculation Rules, Early Hints, fetchpriority, render strategy, SSR, SSG, CSR, third-party script, list virtualization |
+| [accessibility.md](references/accessibility.md) | a11y, WCAG, ARIA, screen reader, keyboard, focus, contrast, forced colors, reduced motion, dynamic type |
+| [seo.md](references/seo.md) | SEO, canonical, sitemap, robots, structured data, JSON-LD, AEO, GEO, llms.txt, hreflang, Open Graph |
+| [ui-ux.md](references/ui-ux.md) | UI, UX, modal, popover, dialog, drawer, menu, tooltip, breadcrumb, touch target, hit target, popover API, inert |
+| [design.md](references/design.md) | design, typography, color, OKLCH, P3, dark mode, brand, variable font, @layer |
+| [responsive.md](references/responsive.md) | responsive, breakpoint, container query, viewport, safe area, dvh, srcset, subgrid, scrollbar-gutter |
+| [motion.md](references/motion.md) | motion, animation, transition, easing, View Transitions, scroll-driven, WAAPI, @starting-style |
+| [forms.md](references/forms.md) | form, validation, input, autofill, autocomplete, constraintValidation |
+| [data-viz.md](references/data-viz.md) | chart, data viz, axis, legend, Canvas, SVG, WebGL, timezone |
+| [pre-launch.md](references/pre-launch.md) | pre-launch, checklist, ship, gate, verification, evidence |
+| [audit-workflow.md](references/audit-workflow.md) | audit, route, sweep, baseline, capture, polish, multi-page |
+| [components.md](references/components.md) | component, contract, extraction, slots, composition, tokens, Storybook |
+| [defects.md](references/defects.md) | defect, geometry, sweep, threshold, regression, lookup |
+| [security.md](references/security.md) | CSP, COOP, COEP, CORP, cross-origin isolation, Trusted Types, SRI, Permissions-Policy, Referrer-Policy, supply chain |
+| [observability.md](references/observability.md) | RUM, observability, monitoring, source maps, error capture, INP attribution, Reporting API, CrUX, LoAF |
+| [testing.md](references/testing.md) | testing, visual regression, axe-core, pa11y, size-limit, bundlesize, lighthouse-ci, contract test |
+| [auth.md](references/auth.md) | auth, login, passkey, WebAuthn, OAuth, magic link, session, account recovery, CAPTCHA, Storage Access API |
+| [debug-recipes.md](references/debug-recipes.md) | debug, recipe, hydration mismatch, layout overflow, focus trap, font-swap CLS, Lighthouse-flake |
+| [anti-patterns.md](references/anti-patterns.md) | anti-pattern, what to avoid, mistake |
+| [i18n.md](references/i18n.md) | i18n, l10n, locale, translation, Intl, plural rules, bidi, RTL, mirroring, hreflang |
+| [pwa-offline.md](references/pwa-offline.md) | PWA, offline, service worker, install prompt, push, background sync, manifest |
+| [build-hygiene.md](references/build-hygiene.md) | build, tree-shaking, sideEffects, lockfile, dead code, code splitting, dependency cost |
+| [embed-patterns.md](references/embed-patterns.md) | embed, iframe, sandbox, postMessage, host, guest, third-party widget |
+| [print-email.md](references/print-email.md) | print, email, @page, page-break, transactional email, Outlook |
+| [quick-reference.md](references/quick-reference.md) | rule, quick reference, highest leverage |
 
 ## Workflow
 
 ### 1. Frame the work
 
-Before writing code, capture:
+Before writing code, capture: audience and intent; indexability (search-indexed surface vs auth wall); aesthetic direction (one bold lane; refuse "Inter on white with a purple gradient"); constraints (render strategy from the table above, hydration model, browser support floor, locale, writing direction).
 
-- **Audience and intent**: who is using this, and what task are they trying to complete (discovering, comparing, deciding, doing the job, recovering from error)
-- **Indexability**: is this surface indexed by search engines, or behind authentication? (Affects SEO requirements only; performance and accessibility bars are universal.)
-- **Aesthetic direction**: pick one bold lane (refined-minimal, editorial, brutalist, organic, retro-futuristic, luxury, playful, industrial). See [design.md](references/design.md). Refuse to default to "Inter on white with a purple gradient".
-- **Constraints**: render strategy (SSR / SSG / CSR / ISR / streaming / islands / resumable), hydration model, browser support floor, locale, writing direction (LTR / RTL)
-
-The rendered browser is the source of truth at every phase. Do not judge visual quality from code alone; capture screenshots, compare against the reference, fix, and re-capture. When the work is auditing or polishing an existing multi-page site rather than building new, switch to the 19-phase Multi-Page Polish Loop below; the strategic frame above still applies.
+The rendered browser is the source of truth at every phase. Do not judge visual quality from code alone; capture screenshots, compare against the reference, fix, and re-capture. When the work is auditing or polishing an existing multi-page site rather than building new, switch to the Multi-Page Polish Loop below.
 
 ### 2. Plan the structure
 
-- One H1 per page. Sequential H2 -> H3, no skipped levels.
-- Land the LCP element in the first viewport. It must be a real, served asset with declared dimensions, not lazy-loaded, not behind hydration.
-- Reserve space for every async element (image, video, ad, embed, late-injected component) using `aspect-ratio`, fixed height, or skeleton.
-- Place navigation, primary action, and trust signals above the fold on the relevant device class.
-- Decide which sections are server-rendered, which are streamed, which are deferred, and which are client-only. Justify every client-only choice.
+One H1 per page; sequential headings. Land the LCP element in the first viewport (a real, served asset with declared dimensions, not lazy-loaded, not behind hydration). Reserve space for every async element (`aspect-ratio`, fixed height, skeleton). Decide which sections are server-rendered, which are streamed, which are deferred, which are client-only; justify every client-only choice.
 
 ### 3. Build with budgets
 
-For each surface, declare and verify:
-
-- JS payload budget (initial route, gzipped)
-- CSS payload budget (initial route, gzipped)
-- Image payload budget (above-the-fold)
-- Font budget (families, weights, subsets, byte total)
-- Third-party script budget (count and total ms of main-thread time)
-
-Reject any addition that breaks a budget without an explicit, recorded waiver.
+Declare and verify per surface: JS payload (initial route, gzipped); CSS payload (initial route, gzipped); image payload (above the fold); font budget (families, weights, subsets, byte total); third-party script budget (count, total ms of main-thread time). Reject any addition that breaks a budget without an explicit, recorded waiver.
 
 ### 4. Verify
 
@@ -119,90 +187,26 @@ Run the full Lighthouse + axe + visual + responsive + dark-mode + reduced-motion
 
 ## Multi-Page Polish Loop
 
-When the work is auditing or polishing an existing multi-page site, **read [audit-workflow.md](references/audit-workflow.md) first** for the full procedure (operating rules, capture script, per-phase detail, final acceptance gate). The 19 phases below are the index; deep links jump into the corresponding sections. Component extraction discipline lives in [components.md](references/components.md); the defect lookup and geometry sweep live in [defects.md](references/defects.md).
+When the work is auditing or polishing an existing multi-page site, **read [audit-workflow.md](references/audit-workflow.md) first** for the full procedure (operating rules, capture script, per-phase detail, final acceptance gate). The 19 phases index:
 
-1. **Discover Context**: identify project root, build system, source directories, dev server, reference target, and route scope.
-2. **Inventory Routes**: build a route list from links, sitemaps, route manifests, and known required pages.
-3. **Inventory Repeated Widgets**: catalogue the 11 widget families across routes; record source, contract, and variants.
-4. **Capture Baseline**: screenshot every route at `1440x900` and `375x812` before editing.
-5. **Capture Reference**: screenshot the reference target at the same viewports.
-6. **Audit Each Route**: walk header, hero, sections, cards, buttons, typography, color, images, forms, footer, and responsive behavior at each viewport.
-7. **Prioritize Fixes**: broken routes first, then global shell, then cross-page widget drift, then cross-page component defects, then page-specific issues.
-8. **Patch With Component Discipline**: fix the canonical contract, not page-local CSS.
-9. **Patch With Design Discipline**: tokens first; stable dimensions, gap, max-width, focus-visible, and per-role image loading.
-10. **Verify After Every Fix Group**: rebuild, re-capture, side-by-side compare; check shared components on every route.
-11. **Run Programmatic Geometry Checks**: viewport overflow, text overflow, sub-44 targets, duplicate arrows, dropdown centering, drawer scroll-lock, focus presence.
-12. **Component Drift Checks**: collect computed styles and bounding boxes per family across pages; flag unexplained differences.
-13. **Interaction QA**: open dropdowns, drawers, modals, tabs; verify Esc, outside-click, scroll-lock, focus ring, accessible names.
-14. **Accessibility Validation**: lang, main, headings, labels, alt, contrast, focus order, no traps, skip link.
-15. **Lighthouse and Performance Polish**: responsive `srcset`, intrinsic dimensions, LCP preload, lazy below the fold, font budget.
-16. **Reference-Level Design Heuristics**: 16 yes-or-no quality tests against the reference target.
-17. **Common Defects and Fixes**: 29-row symptom-to-fix lookup; apply the standard fix at the right layer.
-18. **Deliverables**: per-page checklist, widget inventory, before-and-after screenshots, validation summary.
-19. **Final Acceptance Gate**: 16-item binary checklist; not done until every item is yes.
+1. Discover context. 2. Inventory routes. 3. Inventory repeated widgets. 4. Capture baseline. 5. Capture reference. 6. Audit each route. 7. Prioritise fixes. 8. Patch with component discipline. 9. Patch with design discipline. 10. Verify after every fix group. 11. Programmatic geometry checks (and content-and-markup sweep). 12. Component drift checks. 13. Interaction QA. 14. Accessibility validation. 15. Lighthouse and performance polish. 16. Reference-level design heuristics. 17. Common defects and fixes. 18. Deliverables. 19. Final acceptance gate.
 
-## Quick Reference: The 41 Highest-Leverage Rules
+Component extraction discipline lives in [components.md](references/components.md); defect lookup and the geometry sweep in [defects.md](references/defects.md).
 
-A condensed view. Every rule has a longer treatment in the references.
+## Quick Reference
 
-### Performance (the levers that actually move the score)
+The highest-leverage rules across performance, accessibility, SEO, UI/UX, design, and multi-page consistency live in [references/quick-reference.md](references/quick-reference.md). Open that file when you want a single condensed view to scan against a change.
 
-1. **One LCP image, optimized end-to-end.** Serve AVIF first, WebP fallback, responsive `srcset` with at least 3 widths, declared `width`/`height`, `fetchpriority="high"`, no lazy-load, preload only if the image is rendered by client JS.
-2. **Inline critical CSS for above-the-fold; defer the rest.** Aim for under 14 KB of inline CSS so it fits in the first TCP round trip.
-3. **Self-host fonts, subset to used glyphs, `font-display: swap` for body, `optional` for display.** Preload at most one critical font weight. Never preload 4 weights.
-4. **Cap initial JS at the budget.** Code-split by route and by interaction. Defer hydration of below-the-fold islands. Prefer server components or static HTML where possible.
-5. **No layout-shifting late content.** Reserve space with `aspect-ratio`, `min-height`, or skeletons. The CLS budget is < 0.1 mobile / < 0.05 desktop.
-6. **Animate only `transform` and `opacity`.** Anything that triggers layout (width/height/top/left/margin) is forbidden in animations.
-7. **Pin third-party scripts to async/defer with `fetchpriority="low"`.** Treat every third-party script as a Lighthouse hostage. Audit count and total CPU monthly.
-8. **Cache aggressively at the edge.** Static assets get immutable + 1 year. HTML gets stale-while-revalidate. API responses get the longest TTL the data allows.
-9. **Unique ids in reused components.** A component with a hardcoded DOM `id` produces duplicate ids when rendered more than once (invalid HTML, broken ARIA). Derive a per-instance id (`useId()` or equivalent) and namespace child ids.
-10. **Verify the shipped artifact.** Check copied static files and headers (a `_headers` file, robots.txt, security headers) in the BUILT output and the live response, not just source.
+## Skill freshness
 
-### Accessibility (the levers that actually move the score AND help real users)
+This skill encodes web-platform behaviour at a point in time. Before applying an old rule, double-check it is still current when:
 
-11. **Semantic HTML first; ARIA only where semantics fall short.** A `<button>` beats `<div role="button">` every time.
-12. **Contrast >= 4.5:1 for body, >= 3:1 for large text and meaningful UI graphics.** Verify in both light and dark mode separately.
-13. **Visible focus on every interactive element**, with 2-4px outline and 3:1 contrast against the surface and against the element's resting state.
-14. **One H1; sequential headings; no skipped levels; no headings used as styling hooks.**
-15. **Every input has a programmatic label.** Placeholder is not a label.
-16. **Every meaningful image has descriptive alt; every decorative image has `alt=""`.**
-17. **Keyboard parity.** Everything reachable by mouse must be reachable, operable, and visible-when-focused by keyboard.
-18. **Respect `prefers-reduced-motion`** by removing or shortening non-essential animation, never by leaving full motion in place.
+- The rule cites a Lighthouse audit ID, weight, or category cutoff (Lighthouse rebalances categories every few releases).
+- The rule cites a browser-support floor (Baseline status moves; check caniuse.com or the MDN Baseline widget).
+- The rule cites a specific Core Web Vitals threshold or metric name (INP replaced FID in 2024; thresholds are revisited).
+- The rule names a CSS or JS API ([`@layer`, View Transitions, Anchor Positioning, Popover, `:has()`] all changed support between 2023 and 2026).
 
-### SEO (the levers that actually move the score AND drive traffic)
-
-19. **Unique, intent-matching `<title>` and `<meta name="description">` per page.** 50-60 char title, 140-160 char description.
-20. **Self-referencing canonical on every indexable page.** No conflicting canonicals between hreflang variants.
-21. **One H1 with the primary intent term used naturally.** Sequential H2/H3.
-22. **Descriptive, kebab-case, lowercase URLs without tracking params in canonical.**
-23. **JSON-LD structured data where applicable** (Organization, WebSite, BreadcrumbList, Article, FAQPage, Product, SoftwareApplication, HowTo).
-24. **Internal linking with descriptive anchor text.** No "click here". No orphan pages.
-25. **`robots: index, follow` on indexable pages**, `noindex` on private, search-result, or duplicate pages.
-26. **XML sitemap lists only canonical, indexable, 200-status URLs**, referenced from robots.txt.
-27. **AI answer-engine readiness.** Ship an `llms.txt` page index (and optionally an `llms-full.txt` of quotable facts), ensure the AI crawler user-agents are not blocked in robots.txt (a dedicated named group is needed only when it repeats your disallows, since it replaces the `*` group), and keep load-bearing facts in server-rendered text. Generative search reads and cites the rendered HTML and valid structured data, not images or client-only JS.
-28. **Never fabricate structured data.** Emit `aggregateRating`, `review`, `sameAs`, and `SearchAction` only when each is backed by something real (real reviews, real profiles, a working search endpoint). Every JSON-LD value must be derivable from visible content.
-
-### UI/UX (the levers that move perceived quality)
-
-29. **Touch targets >= 44x44 CSS px for standalone controls** (the iOS 44pt / Android 48dp guideline), with 8px+ spacing. Inline text links (breadcrumbs, in-prose links, footer text lists) are exempt under WCAG 2.5.8; do not inflate them to 44px, it reads as broken. Reserve the large target for buttons, toggles, icon buttons, and CTAs.
-30. **Every async action has loading -> success/error feedback within 100ms of the trigger.** Skeleton screens beat spinners after 300ms.
-31. **One primary CTA per screen.** Secondary actions visually subordinate; destructive actions visually separated.
-32. **State the empty state.** Empty lists, empty searches, and zero-data charts get a specific message, not a blank canvas.
-33. **The mobile nav must work without JavaScript.** If the small-screen nav is JS-driven (a disclosure, an island, a media-gated component), ship a `<noscript>` fallback nav or render the links in static HTML and enhance, so the links exist before and without hydration.
-34. **Scroll-lock without a sideways jump.** When locking body scroll for a modal, reserve the scrollbar width as `padding-right` (`window.innerWidth - document.documentElement.clientWidth`) and restore it on close, or the page shifts when the scrollbar disappears.
-
-### Design (the levers that move "this looks designed")
-
-35. **Pick a distinctive type pairing.** Refuse Inter + system-ui defaults. Pair a characterful display face with a refined body face. Cap to 2 families and 4 weights.
-36. **Commit to a dominant color with one or two sharp accents.** Timid, evenly-distributed palettes read as generic. Use semantic tokens, never raw hex in components.
-
-### Multi-page consistency (the levers that prevent cross-page drift)
-
-37. **Extract repeated markup at the third instance** (or at the second with clear future reuse, or at any visible drift). One source of truth or one named variant; no third option.
-38. **No page-local CSS overrides on shared widgets.** Components own their visual contract; pages adjust only what the component exposes.
-39. **Capture before-and-after screenshots at `1440x900` and `375x812` for every visible change.** Vague claims of improvement without screenshot evidence are not evidence.
-40. **Re-render every route after every fix group on shared widgets.** A global change verified on one page is not verified.
-41. **Geometry sweep returns zero issues at both audit viewports** (viewport bleed, text overflow, sub-44 targets, duplicate arrows, drawer scroll-lock, focus presence). See [defects.md](references/defects.md).
+See [CHANGELOG.md](CHANGELOG.md) for the dated history of additions and refinements.
 
 ## Self-Improvement
 
