@@ -196,12 +196,12 @@ The thresholds below align with the North Star Targets in the entry SKILL.md and
 | Check | Threshold | Source |
 |-------|-----------|--------|
 | Capture viewports | `1440x900` desktop, `375x812` mobile | [responsive.md](responsive.md) breakpoints table |
-| Touch target minimum | 44 by 44 CSS pixels | Rule 29 in SKILL.md, [ui-ux.md](ui-ux.md) hit targets table |
+| Touch target minimum | 44 by 44 CSS pixels | Rule 29 in [quick-reference.md](quick-reference.md), [ui-ux.md](ui-ux.md) hit targets table |
 | Horizontal overflow tolerance | 0 px on mobile, 0 px on desktop | [responsive.md](responsive.md) |
 | Duplicate arrow count | 0 across all visible labels | This file, defect table |
 | Dropdown centering tolerance | 4 px from trigger center | This file, geometry sweep |
 | Focus ring contrast | 3:1 against surface and resting state | [accessibility.md](accessibility.md) contrast targets |
-| LCP image declared dimensions | Both `width` and `height` present | Rule 1 in SKILL.md, [performance.md](performance.md) |
+| LCP image declared dimensions | Both `width` and `height` present | Rule 1 in [quick-reference.md](quick-reference.md), [performance.md](performance.md) |
 
 A run is "clean" when every check returns zero issues at both capture viewports.
 
