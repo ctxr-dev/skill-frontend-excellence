@@ -1,3 +1,14 @@
+---
+title: Responsive Layout
+purpose: Framework-agnostic guidance on layouts that hold across viewports, orientations, themes, zoom levels, and modern form factors. Covers breakpoints, container queries, fluid units, safe areas, subgrid, has() patterns, scrollbar-gutter, and foldables.
+load-when:
+  task-keywords: [responsive, breakpoint, mobile, tablet, desktop, container query, viewport, safe area, dvh, srcset, fluid typography, subgrid, scrollbar-gutter]
+  symptoms: [horizontal scroll, viewport overflow, scroll lock side shift, iOS 100vh, broken on Safari, rubber-band scroll]
+prereq: SKILL.md
+related: [ui-ux.md, design.md, accessibility.md, performance.md]
+size: ~620 lines
+---
+
 # Responsive Layout
 
 Framework-agnostic guidance on building layouts that work across the full range of devices, from 320px phones to 4K displays, in portrait and landscape, with light and dark themes, with system text scaling, and with browser zoom.
@@ -103,6 +114,84 @@ When to use:
 When NOT to use:
 
 - Top-level page layout. Viewport queries are simpler and more universally supported.
+
+### Style queries: `@container style(...)`
+
+Style queries let a descendant respond to a custom property declared on the container, not to its size. Use them to express conditional styling based on theme, density, or any container-scoped state.
+
+```css
+.card { container-name: card; --theme: light; }
+.card.dark { --theme: dark; }
+
+@container card style(--theme: dark) {
+  .card-title { color: var(--color-foreground-on-dark); }
+}
+```
+
+This eliminates the need for nested theme-class selectors throughout components. The component reads the theme from its container, and the container declares it once. Use for theme propagation, density modes (`--density: compact`), brand variants, anywhere a single conditional re-styles a component subtree.
+
+### `@container scroll-state` (sticky-aware styling)
+
+When an element is `position: sticky`, there is no native CSS to ask "am I currently stuck?". `@container scroll-state(stuck: top)` answers that question, letting you style the sticky element differently the moment it pins.
+
+```css
+.sticky-header {
+  position: sticky; top: 0;
+  container-type: scroll-state;
+  background: transparent;
+  transition: background 200ms ease-out;
+}
+
+@container scroll-state(stuck: top) {
+  .sticky-header { background: var(--color-surface); box-shadow: var(--shadow-sm); }
+}
+```
+
+Use for headers that go opaque when pinned, side nav items that gain emphasis when stuck, table headers that shadow when separated from rows. This replaces the JS `IntersectionObserver` with a sentinel that everyone used to write. Support is rolling out; `IntersectionObserver` remains the fallback.
+
+## `:has()` Cookbook
+
+`:has()` (Baseline 2023; broad support across Chrome, Safari, Firefox) is the parent selector CSS lacked for two decades. It lets a parent style itself based on the state or presence of its descendants. Treat it as the standard tool for parent-state styling, not an experimental flourish.
+
+Canonical patterns:
+
+- **Component variant by child presence.** Style a card differently when it has an image.
+
+```css
+.card { padding: var(--space-4); }
+.card:has(img) { padding: 0; } /* the image fills the top */
+```
+
+- **Form-level invalid state.** Style the whole form when any field is invalid, without a JS class toggle.
+
+```css
+.form:has(:invalid) { border-color: var(--color-danger); }
+.form:has(:invalid) .submit-btn { opacity: 0.6; pointer-events: none; }
+```
+
+- **Layout shifts based on child count.** A nav that becomes vertical when it has more than five items.
+
+```css
+.menu:has(> :nth-child(6)) { flex-direction: column; }
+```
+
+- **Container-relative state.** A card that lifts when any descendant button is hovered.
+
+```css
+.card:has(button:hover) { transform: translateY(-2px); }
+```
+
+- **Empty-state styling.** A list that styles its empty state without a special class.
+
+```css
+.list:not(:has(li)) { display: grid; place-items: center; min-height: 200px; }
+```
+
+Rules:
+
+- `:has()` is computed at every style recalculation; do not chain deep `:has(.a:has(.b:has(.c)))` expressions in heavy lists. The performance cost is real but rarely measurable for the patterns above.
+- Use `:has()` to replace ad-hoc class toggles your JS used to manage. Fewer event listeners, fewer race conditions, less hydration cost.
+- The polyfill is JavaScript that re-runs on every DOM change; do not ship it. Treat `:has()` as the modern path and let unsupported browsers degrade to the unstyled state.
 
 ## Fluid Typography
 
@@ -323,6 +412,39 @@ CSS Grid with auto-fit:
 
 This wraps from 1 column to 2/3/4 columns as the container grows.
 
+### Subgrid
+
+Subgrid (Baseline 2024, Chrome, Safari, Firefox) is the right tool the moment a nested element needs to align to the parent grid's rows or columns. Without subgrid, a card's title, body, and footer cannot align across siblings unless every card has the same content height; with subgrid, they align automatically because they live on the same tracks.
+
+```css
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-rows: auto 1fr auto; /* title, body, footer */
+  gap: var(--space-4);
+}
+
+.card {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+}
+
+.card-title  { grid-row: 1; }
+.card-body   { grid-row: 2; }
+.card-footer { grid-row: 3; }
+```
+
+The whole row of card titles now share a row track; the whole row of footers share a track. Vertical alignment across cards is automatic. The same pattern works for columns: a form whose labels align across the page even when nested in a field-group wrapper, a magazine layout where a caption column threads through nested editorial blocks.
+
+Use subgrid for:
+
+- Card grids where titles, prices, CTAs must align across rows even with varying body lengths.
+- Forms where labels, inputs, and helper text must form three clean columns across nested fieldsets.
+- Editorial pages where a sidebar caption column aligns to the body grid.
+
+Anti-pattern: using `subgrid` on a grid that does not need named-area alignment. It is the alignment tool; if the children do not need to align to the parent's tracks, regular grid is simpler.
+
 ## Containers and Max Widths
 
 ### Page container
@@ -353,6 +475,58 @@ Don't go full-width on huge displays. Lines longer than ~75 characters become ha
 ### Reading containers
 
 For prose, set `max-inline-size: 65ch` to constrain line length.
+
+## Animating Intrinsic Sizes
+
+### `interpolate-size` and `calc-size()` with `height: auto`
+
+Animating to and from `height: auto` was impossible in CSS for two decades; teams wrote JavaScript that pre-measured the open height, applied it in a `max-height` transition, then cleared it on `transitionend`. That code is the cause of every accordion that flashes, jumps, or measures the wrong height after content loads.
+
+`interpolate-size: allow-keywords` (Baseline 2026, Chrome shipping) lets the browser interpolate intrinsic-size keywords like `auto`, `min-content`, and `max-content`. The animation just works:
+
+```css
+:root { interpolate-size: allow-keywords; }
+
+.accordion-body {
+  height: 0;
+  overflow: hidden;
+  transition: height 250ms ease-out;
+}
+
+.accordion-body[data-open] {
+  height: auto;
+}
+```
+
+`calc-size()` extends this for arithmetic on the intrinsic value: `height: calc-size(auto, size + 16px)` animates to the content's natural height plus padding.
+
+Reduced-motion fallback:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  .accordion-body { transition: none; }
+}
+```
+
+For older browsers without `interpolate-size`, the accordion snaps open instantly. That is a clean degradation. Reach for the JS pre-measure pattern only when you must support a browser floor that excludes Chrome stable.
+
+## Scrollbars
+
+### `scrollbar-gutter: stable` (the modal-shift fix)
+
+The classic "page jumps sideways when a modal opens" bug comes from the vertical scrollbar disappearing as the body scroll lock takes effect. The page widens by the scrollbar's width, and every fixed and centered element jumps. The traditional fix is to compute the scrollbar width and apply matching padding-right to the body on lock.
+
+`scrollbar-gutter: stable` (Baseline 2024) replaces that JS dance with a single declaration: the browser reserves space for the scrollbar even when no scrollbar is visible. The gutter is always present, so removing the scrollbar (when scroll is locked, when content shrinks, when an overlay scrollbar fades out) no longer reflows the page.
+
+```css
+:root {
+  scrollbar-gutter: stable;
+}
+```
+
+Apply at the document root for the global benefit (modals, drawers, dialogs all stop shifting). Apply on individual scroll containers where you want the same stability for the same reason. On overlay-scrollbar systems (macOS default, mobile), the gutter is 0px and nothing changes; the rule is safe everywhere.
+
+For dual-side stability (when you want symmetry on a centered layout), `scrollbar-gutter: stable both-edges` reserves the gutter on both sides.
 
 ## Horizontal Scroll: Forbidden
 
@@ -396,6 +570,26 @@ Some users hold phones in landscape. Don't lock layout to portrait.
 - Don't assume landscape phones have a tablet-class screen height (they're short).
 - For full-screen forms or inputs, support both orientations.
 - Test landscape mode on an actual phone.
+
+### Foldables and `device-posture`
+
+Foldable phones (Galaxy Z Fold, Pixel Fold, Surface Duo) introduce a posture dimension that orientation alone does not capture: folded (single screen), unfolded (a single wide screen with a hinge gap), and book / tabletop modes (two halves at an angle). `viewport-fit=cover` on the viewport meta is required so layout can reach the seam and the safe-area insets work; the `device-posture` media query and the `screen.fold` API (where supported) let layout adapt to the hinge.
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+```
+
+```css
+@media (device-posture: folded) {
+  .reader { columns: 1; padding-inline: var(--space-4); }
+}
+
+@media (device-posture: continuous) {
+  .reader { columns: 2; column-gap: var(--space-8); }
+}
+```
+
+For most product surfaces, foldable support is one breakpoint test (does the layout look right at 600 to 800px unfolded?) and a viewport meta. Reach for `device-posture` only when the seam genuinely changes the design (a reading app that splits across pages, a map app that uses one half for the map and one for controls). Support is partial; treat as progressive enhancement.
 
 ## Dynamic Type / Font Scaling
 

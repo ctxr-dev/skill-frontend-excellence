@@ -1,3 +1,14 @@
+---
+title: Motion and Animation
+purpose: Framework-agnostic guidance on motion that conveys meaning, performs at 60fps, respects user preferences, and uses the modern platform primitives (View Transitions, WAAPI, scroll-driven, @starting-style).
+load-when:
+  task-keywords: [motion, animation, transition, easing, View Transitions, scroll-driven, WAAPI, will-change, "@starting-style", reduced motion]
+  symptoms: [INP regression, slow interaction, CLS regression, score dropped]
+prereq: SKILL.md
+related: [performance.md, accessibility.md, ui-ux.md, design.md]
+size: ~660 lines
+---
+
 # Motion and Animation
 
 Framework-agnostic principles for motion that conveys meaning, performs at 60fps, and respects user preferences.
@@ -68,6 +79,23 @@ Apple-style spring curves (CSS):
 
 For genuinely physics-based motion, use a library (Motion / Framer Motion, React Spring, GSAP). Spring physics with stiffness, damping, mass produces natural-feeling motion that handcrafted bezier curves rarely match.
 
+### CSS `linear()` for spring approximations
+
+The `linear()` easing function (Baseline 2024) takes a list of stops and interpolates linearly between them, which lets you approximate a spring (or any arbitrary curve) in pure CSS, without a library and without the JS cost of a physics simulation.
+
+```css
+.bounce {
+  transition: transform 600ms linear(
+    0, 0.009, 0.035, 0.078, 0.137, 0.21, 0.296, 0.394, 0.502,
+    0.62, 0.745, 0.876, 1, 1.062, 1.114, 1.156, 1.186, 1.207,
+    1.217, 1.219, 1.213, 1.2, 1.18, 1.156, 1.13, 1.103, 1.078,
+    1.056, 1.039, 1.024, 1.014, 1.007, 1.003, 1.001, 1
+  );
+}
+```
+
+You do not write these stops by hand. Generate them once from a spring (stiffness, damping, mass) with a tool like `linear()` generator, then paste into CSS. The result: spring-physics motion that runs on the compositor with no main-thread cost, and that respects `prefers-reduced-motion` through the normal CSS path. Use this in place of hand-rolled cubic-bezier-fit-to-spring (which never quite matches) and in place of JS spring libraries for the common "snap with overshoot" feel.
+
 ## What to Animate (and what NOT to animate)
 
 ### Animate
@@ -102,6 +130,34 @@ Use FLIP (First, Last, Invert, Play):
 Libraries like Motion's layout animations and React's `useLayoutEffect` patterns implement this for you.
 
 For full route or DOM transitions, the new `view-transition` API is the right tool.
+
+## Web Animations API
+
+CSS animations are the right default for declarative, repeatable motion. The Web Animations API (`element.animate()`, `Animation`, `getAnimations()`) is the right tool the moment motion becomes stateful, interruptible, dynamic, or coordinated across elements at runtime.
+
+```js
+const anim = card.animate(
+  [{ transform: 'translateY(20px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }],
+  { duration: 400, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' }
+);
+
+anim.onfinish = () => anim.commitStyles();
+```
+
+What WAAPI does that CSS cannot:
+
+- **Interruptible.** `anim.pause()`, `anim.cancel()`, `anim.reverse()`, `anim.playbackRate = 0.5`. Interrupting a CSS animation cleanly requires class juggling and timing hacks.
+- **Coordinated.** `getAnimations()` returns every running animation on the page. Use it to pause every motion on a route change, or to drive a "are we still animating?" gate.
+- **Stateful.** `commitStyles()` writes the current animation values to the element's inline style, so finishing an animation leaves the element in its end state without `fill: forwards` quirks. Essential for animations whose start state depends on the previous animation's end.
+- **Dynamic keyframes.** Pass arbitrary computed keyframe objects, including values you computed from the DOM measurement two lines earlier. CSS animations cannot accept runtime-computed values.
+
+Reach for WAAPI when:
+
+- You need to start an animation, then interrupt it on a user gesture (cancel on click, reverse on hover-out, pause during a drag).
+- You are running a FLIP layout animation and the keyframes depend on measured before / after positions.
+- You need to coordinate animations across multiple elements with shared timing or a single global controller.
+
+Stay with CSS animations for: hover effects, static reveals, skeleton loops, simple modal entrances, anything where the same animation always plays the same way.
 
 ## Reduced Motion
 
@@ -208,6 +264,32 @@ Modern CSS supports scroll-driven animations:
 
 Browser support is improving. With `IntersectionObserver` as fallback, this covers most cases.
 
+### `animation-timeline: scroll()` for scroll-progress
+
+`view()` (above) ties an animation to an element entering or leaving the viewport. `scroll()` ties an animation to the scroll position of a scroll container itself, from 0 percent (top) to 100 percent (bottom). Both are Baseline 2024.
+
+Canonical uses for `scroll()`:
+
+- **Reading progress bar.** A bar that fills as the user scrolls the article. Zero JS.
+
+```css
+.progress {
+  position: fixed; top: 0; left: 0; height: 3px;
+  background: var(--brand);
+  transform-origin: left;
+  animation: fill linear;
+  animation-timeline: scroll(root);
+  animation-range: 0% 100%;
+}
+
+@keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+```
+
+- **Sticky-fade header.** Header background opacity rises from 0 to 1 over the first 100 to 200px of scroll, giving the header a transparent state on hero and an opaque state on body. No scroll listener.
+- **Section-position indicator.** A side-nav dot that moves down a vertical track as the page scrolls.
+
+Use `scroll()` for "where in the document am I" effects. Use `view()` for "is this element visible" effects. Both run on the compositor at 60fps and respect `prefers-reduced-motion` through the standard CSS path.
+
 ### Intersection Observer (universal)
 
 ```js
@@ -281,6 +363,32 @@ For shared element transitions (e.g., a card in a list expands into a detail vie
 The browser automatically morphs between them.
 
 For frameworks without `view-transition` support, libraries like Motion provide layout animations.
+
+### Cross-document View Transitions (MPA)
+
+Same-document View Transitions (the SPA case above) ship in every Chromium-based browser and Safari. The cross-document variant, which animates between two full-document navigations (the multi-page app case), is the newer release: Chrome 126+ and Safari 18+. Firefox is rolling it out; treat it as progressive enhancement.
+
+A single line of CSS opts the whole site into automatic cross-page transitions:
+
+```css
+@view-transition {
+  navigation: auto;
+}
+```
+
+That is it. No JS, no router integration, no framework. The browser captures the outgoing document, fetches and parses the incoming one, then crossfades the two as the new page renders. Shared element transitions across the page boundary work the same way: matching `view-transition-name` values on the outgoing and incoming pages auto-morph between them.
+
+```css
+.product-image { view-transition-name: product-hero; }
+```
+
+Constraints to know:
+
+- Same-origin only. The browser will not transition across origins.
+- Both navigations must opt in (`@view-transition { navigation: auto }` in the CSS of both pages).
+- Firefox without support degrades to a normal navigation, no transition. The page still works.
+
+Use this for static sites, server-rendered apps, and any MPA where the perceived-instant feeling of an SPA was the reason teams chose a client-side router. Cross-doc View Transitions remove that reason.
 
 ## Loading and Progress Indicators
 
@@ -388,6 +496,40 @@ For tappable cards/buttons: subtle 0.95-0.98 scale on press, restore on release.
 Mobile: rely on `:active`. The browser handles touch feedback.
 
 ## Modal/Sheet Entrance
+
+### Open-from-closed transitions (`@starting-style`)
+
+Transitioning an element that toggles between `display: none` and `display: block` (the natural state for popovers, dialogs, and toasts) used to require JS choreography because `display` is a discrete property and `none` to `block` has no animatable intermediate. Three modern features fix this; together they are now the canonical way to animate popovers and dialogs open from closed.
+
+- `@starting-style { ... }` declares the styles the element takes the moment it enters the DOM (or transitions out of `display: none`). The browser interpolates from the starting-style values to the active styles.
+- `transition-behavior: allow-discrete` lets the browser animate discrete properties (including `display`) over the transition duration instead of snapping at the boundaries.
+- `transition: display ...` combined with the two above means `display: none` to `display: block` actually plays the transition.
+
+```css
+[popover] {
+  opacity: 0;
+  transform: scale(0.96);
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out,
+    display 200ms allow-discrete,
+    overlay 200ms allow-discrete;
+}
+
+[popover]:popover-open {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@starting-style {
+  [popover]:popover-open {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+```
+
+This is Baseline-modern (Chrome, Safari, Edge; Firefox shipping). Use it for popovers, dialogs, dropdowns, toasts, tooltips, and any element whose lifetime is "absent or present" rather than "always present, sometimes visible". The fallback on a browser without `@starting-style` is an instant snap, which degrades gracefully.
 
 ### Modal (centered)
 
@@ -584,6 +726,40 @@ const observer = new IntersectionObserver((entries) => {
   });
 });
 ```
+
+## Motion Budget and Measurement
+
+Motion is a budget like JS, CSS, and images. The budget is the main-thread work each animation costs and the total frames-per-second the page sustains. Measure, do not guess.
+
+### DevTools Animations panel
+
+Chrome DevTools has a Performance > Animations panel that captures every running animation, names them, and shows timing, easing, and which thread they run on. Open it during a page load or a route transition; anything that is not compositor-only (transform, opacity, filter) shows up in red. Use it as the first stop when an interaction feels sluggish.
+
+The Performance panel itself remains the source of truth. Record an interaction, look for Long Animation Frames (LoAF) and tasks > 50ms, find the animation's stack frames. A 60fps motion has a 16.7ms frame budget; any frame past that drops below 60fps. Two consecutive long frames are perceptible.
+
+### `will-change` hygiene
+
+`will-change` tells the browser to promote an element to its own compositor layer ahead of an animation, eliminating the layer-creation pause when the animation starts. Misused, it inflates GPU memory and makes the page slower.
+
+Rules:
+
+- Declare `will-change` ONLY immediately before the animation starts (on hover-intent, on the pointer-down that begins a drag, on the keypress that opens a panel). Add via class or `style.willChange = '...'` at the trigger.
+- Remove `will-change` as soon as the animation ends (on `animationend`, `transitionend`, or the WAAPI `Animation.finished` promise resolve). Leaving it on permanently consumes memory and can degrade other animations.
+- Never apply `will-change: transform` globally to large element classes (e.g., every card). The browser allocates a separate layer for each one.
+- Animate `transform` and `opacity` (composited) and you rarely need `will-change` at all. Animate anything that triggers layout and `will-change` does not save you; rewrite the animation.
+
+### Profiling a 60fps drop
+
+When motion feels janky on a slower device:
+
+1. Throttle CPU to 4x or 6x in DevTools Performance settings to reproduce on a fast machine.
+2. Record an interaction that includes the animation.
+3. Look at the frame chart. Any red bars are long frames.
+4. Open the long frame; find the task taking the most time (often layout, paint, or a script call inside a JS-driven animation).
+5. Move to a composited property, or move JS work off the main thread, or shorten the animation.
+6. Re-record to confirm the frame chart is green.
+
+A target: every motion holds 60fps on the throttled profile. A page that holds 60fps on a 4x throttled CPU will hold it on the median real device.
 
 ## INP and Animation
 

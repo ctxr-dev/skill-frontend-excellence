@@ -1,3 +1,14 @@
+---
+title: Design Aesthetics
+purpose: Framework-agnostic aesthetic direction: typography, color systems (OKLCH, P3), palette construction, elevation, atmosphere, brand voice, dark mode, and how to avoid the generic AI look.
+load-when:
+  task-keywords: [design, typography, color, palette, OKLCH, P3, wide gamut, spacing, composition, atmosphere, dark mode, light mode, brand, font, variable font]
+  symptoms: [dark mode broken, contrast fail, score dropped]
+prereq: SKILL.md
+related: [ui-ux.md, responsive.md, motion.md, accessibility.md]
+size: ~580 lines
+---
+
 # Design Aesthetics
 
 Framework-agnostic guidance on building interfaces that look intentional, distinctive, and considered. The opposite of generic AI-generated styling.
@@ -102,6 +113,19 @@ If you don't have access to commercial faces, equivalent open-source options wor
 
 Two families and four weights is the budget. Variable fonts let you stretch this without paying the byte cost.
 
+### Variable-font axes beyond `wght`
+
+Variable fonts expose typographic axes that designers used to need separate font files for. Use them; they are free expressive range over a font you already loaded.
+
+- `wght` (weight). The familiar 100 to 900 axis. Use for emphasis, hierarchy, and grade adjustment.
+- `wdth` (width). Compresses or expands letterforms (e.g., 75 narrow to 125 wide). Use for navigation labels at constrained widths, for poster headlines that want to fill a column, or as a subtle hierarchy cue.
+- `opsz` (optical size). Adjusts contrast and spacing for the size at which the type is set: at 12px the letters thicken and open up, at 96px they sharpen and refine. Pair with `font-optical-sizing: auto;` so the browser picks the right shape for the current `font-size` automatically.
+- `slnt` (slant). A true italic-without-an-italic-cut, sloping the upright glyphs without swapping shapes. Useful when the font has no italic master.
+- `GRAD` (grade). Thickens strokes without changing horizontal metrics. Lets you bump weight on a hover or in dark mode without causing reflow. The dark-mode trick: nudge grade up 50 to 100 units to compensate for the optical "thinning" of light-on-dark.
+- Custom axes (`MONO`, `CASL`, `CRSV`, `XOPQ`, others) appear in many modern variable fonts (Recursive, Roboto Flex, Fraunces). Read the font's spec sheet; if a knob is exposed, you can use it.
+
+Vary one or two axes intentionally per project. Animating three axes at once reads as a typography demo, not a product.
+
 ### Type scale
 
 Don't pick sizes by feel. Build a scale.
@@ -154,6 +178,8 @@ Modern CSS supports better text wrapping:
 
 Use `balance` only on H1/H2 (not on every heading). Use `pretty` on long-form copy.
 
+`text-wrap: pretty` is multi-pass: the browser lays out the block, evaluates the result, and re-lays out if a better wrapping exists. On long article bodies that cost compounds. Reserve it for blocks where the win is visible (callout paragraphs, lead paragraphs, captions) and leave routine body copy on default wrapping. Pair `balance` with headings only and `pretty` with short prose only; using both everywhere makes long pages noticeably slower to first paint and to relayout on resize.
+
 ## Color
 
 ### Palette construction
@@ -167,6 +193,53 @@ Start from purpose, not preference.
 5. **One or two accents.** Used sparingly for highlights, links, decorative elements. Should harmonize with the primary.
 6. **Semantic colors.** Success (green), warning (amber/yellow), danger (red), info (blue). Each at 4.5:1 against surfaces.
 7. **A neutral scale.** 9-12 stops between background and foreground (`50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950`). Pick a neutral with a tint (slightly warm: `stone`; slightly cool: `slate`; colored: `zinc` or `gray`). Avoid pure neutral (`gray`) for character.
+
+### OKLCH and OKLab for perceptual palettes
+
+Hex and HSL produce perceptually uneven ramps: an HSL lightness ramp at fixed saturation will jump unevenly across hues, and a hue rotation at fixed lightness will look like it crosses bright and dim zones. OKLCH (and the related OKLab) fix this by parameterising color in a perceptually uniform space: lightness reads as lightness, chroma reads as saturation, hue reads as hue, and equal steps along any axis look equal.
+
+```css
+:root {
+  --brand-500: oklch(62% 0.18 270);
+  --brand-600: oklch(54% 0.18 270);
+  --brand-400: oklch(70% 0.18 270);
+}
+```
+
+For palette generation, `color-mix()` in OKLCH gives you guaranteed-uniform steps:
+
+```css
+:root {
+  --brand: oklch(62% 0.18 270);
+  --brand-tint:   color-mix(in oklch, var(--brand) 20%, white);
+  --brand-shade:  color-mix(in oklch, var(--brand) 80%, black);
+}
+```
+
+Use OKLCH for:
+
+- Lightness ramps in the neutral and brand scales (50 through 950): step lightness by a constant delta, hold chroma and hue.
+- Hue ramps for chart palettes (categorical): hold lightness and chroma, step hue by a constant delta. Twelve perceptually distinct colours fit comfortably.
+- State variants (hover, active, focus): mix the base color toward the foreground or background by 5 to 15 percent in OKLCH for a perceptually consistent shift across the whole palette.
+
+### P3 wide-gamut color
+
+Modern displays (every recent Apple device, most premium Android, Studio Display, Pro Display XDR) render the P3 gamut, which is roughly 35 percent larger than sRGB. Saturated brand colors that look vibrant on a P3 display fall back to a duller sRGB version on older monitors. Both are valid; serve both.
+
+```css
+.brand-cta {
+  background: #4b5cf0; /* sRGB fallback */
+  background: color(display-p3 0.25 0.36 0.95); /* P3 on capable displays */
+}
+
+@media (color-gamut: p3) {
+  :root {
+    --brand: oklch(62% 0.22 270 / display-p3);
+  }
+}
+```
+
+Treat P3 as progressive enhancement. Define every brand color with an sRGB fallback first, then override with the P3 version inside `@media (color-gamut: p3)` or via the cascade. Test in both modes; a P3 token without a fallback renders as the unstyled default on older hardware.
 
 ### Color philosophy
 
@@ -215,6 +288,56 @@ Solid color backgrounds are fine, but distinctive interfaces add atmosphere:
 - Off-page large type ghost letters (the brand name as decorative background).
 
 Atmosphere should be subtle. If it competes with content, dial it down.
+
+### `prefers-reduced-transparency`
+
+Translucent layers (glassmorphism cards, frosted blur panels, atmospheric overlays) hurt some users: vestibular sensitivity, low vision, and certain cognitive profiles need flat, opaque surfaces. The `prefers-reduced-transparency` media query is the contrast / cognitive a11y signal for that group.
+
+```css
+.glass-card {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-card {
+    background: var(--color-surface);
+    backdrop-filter: none;
+  }
+}
+```
+
+Treat this query like `prefers-reduced-motion`: every translucent surface needs a flat fallback. The fallback is not "slightly less blur"; it is opaque background, no `backdrop-filter`, and the same contrast ratio you would ship to a contrast-sensitive user. Test by toggling the OS setting (macOS: System Settings > Accessibility > Display > Reduce transparency; Windows: Settings > Accessibility > Visual effects > Transparency effects).
+
+## CSS Architecture
+
+### `@layer` for design-system precedence
+
+CSS cascade fights (specificity hacks, `!important` chains, "why is this rule winning?") usually come from mixing reset CSS, base typography, design tokens, component CSS, and utility CSS without a declared precedence. CSS Cascade Layers (`@layer`) replace those fights with a single ordering rule: declarations in a later layer always win, regardless of specificity.
+
+A working layer order for a design system:
+
+```css
+@layer reset, base, tokens, components, utilities;
+
+@layer reset { /* normalize.css, your reset */ }
+@layer base { /* element-level typography, body color, link defaults */ }
+@layer tokens { :root { --brand: oklch(62% 0.18 270); } }
+@layer components { .card { padding: var(--space-4); } }
+@layer utilities { .m-0 { margin: 0; } }
+```
+
+What you get:
+
+- Reset rules cannot accidentally beat component rules because reset is the first layer.
+- Utility classes (a single-purpose `.m-0`) reliably beat component CSS without `!important`, because utilities is the last layer.
+- A high-specificity selector in `components` still loses to a low-specificity rule in `utilities`. Specificity stays the tie-breaker inside a layer, not across layers.
+
+Anti-patterns:
+
+- Declaring layers without using them. `@layer components { .card {} }` plus a global `.card {}` outside any layer: the global wins (unlayered beats layered), and the team is confused.
+- Eight layers. Five is the working ceiling. More layers, more mental overhead, no payoff.
+- Layering third-party CSS into your component layer. Put it in its own layer (`@import url(...) layer(vendor);`) at the right precedence, do not let it inherit yours.
 
 ## Spacing and Composition
 
@@ -279,6 +402,20 @@ Shadows in dark mode often look fake. Prefer:
 - Lighter borders to indicate elevation (instead of dark shadows).
 - Subtle glow (1px outset shadow with a low-alpha brand color or white).
 - Higher surface luminance for elevated elements (each elevation step is slightly lighter).
+
+#### Brand-tinted shadows
+
+Pure black shadows (`rgba(0,0,0,0.5)`) on dark surfaces read as harsh and muddy: the shadow is the same hue as the background, just denser, so it disappears into noise rather than reading as depth. Tint the shadow with the brand color or with a lifted neutral instead:
+
+```css
+:root[data-theme="dark"] {
+  --shadow-card:
+    0 4px 12px -2px color-mix(in oklch, var(--brand) 30%, transparent),
+    0 2px 4px -1px color-mix(in oklch, var(--brand) 20%, transparent);
+}
+```
+
+Pick the hue from the brand or from the surface (a slight lightening of the surface base, not pure black). Keep alpha low (15 to 30 percent). The shadow now reads as a colored haze under the card rather than a sharp black blob, which matches how dark UIs feel on OLED panels.
 
 ### Anti-patterns
 
