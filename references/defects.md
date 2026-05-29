@@ -1,3 +1,14 @@
+---
+title: Common Visual Defects and Geometry Checks
+purpose: Symptom-to-fix lookup for visible defects, plus the canonical programmatic geometry sweep and content-and-markup sweep that gate every audited route.
+load-when:
+  task-keywords: [defect, bug, regression, geometry, threshold, audit, sweep, screenshot]
+  symptoms: [viewport overflow, horizontal scroll, duplicate id, font swap CLS, iOS 100vh, rubber-band scroll, focus not visible, focus trap leak, inert leak, aria-hidden leak, dark mode broken]
+prereq: SKILL.md
+related: [audit-workflow.md, components.md, accessibility.md, responsive.md]
+size: ~240 lines
+---
+
 # Common Visual Defects and Geometry Checks
 
 A symptom-to-fix lookup for visible defects, plus a canonical programmatic geometry sweep that runs against every audited route at both capture viewports. Use this file when something looks wrong and you want the standard fix, or when you want a deterministic check that catches issues screenshots can miss.
@@ -45,6 +56,11 @@ The defect table is one big table by design: one search lands you on the symptom
 | Skip link overflows the viewport while hidden | `position: absolute; left: -9999px` can still extend the document layout box, or the focus state inherits the off-screen position | Use the modern `clip-path: inset(100%)` plus `position: absolute; width: 1px; height: 1px; overflow: hidden` pattern when hidden; switch to `clip-path: inset(0); position: fixed; top: 1rem; left: 1rem` on `:focus` |
 | Tables overflow on mobile | Fixed-width table without scroll wrapper | Wrap in a scroll container with `overflow-x: auto`, or transform to cards below the breakpoint |
 | Empty state is blank | No specific message and no primary action | Add a specific message, the condition that fills it, and a primary action that resolves it |
+| iOS Safari `100vh` clips behind home indicator; rubber-band scroll exposes page background | `100vh` resolves to the largest viewport (excluding URL bar collapse and home indicator); momentum scroll on inner containers bleeds to the document | Use `100dvh` for "currently visible" height, `100svh` for the smallest stable height (avoid layout shift on URL-bar collapse), `100lvh` for the largest. On momentum-scroll containers add `-webkit-overflow-scrolling: touch` and `overscroll-behavior: contain` so the rubber-band stays inside the container, not the document |
+| Modal `z-index: 9999` sits behind an ancestor | The modal is rendered inside an ancestor that establishes a stacking context (any `transform`, `filter`, `position: fixed`, `will-change`, `opacity < 1`, or `isolation: isolate`); the child's `z-index` is bounded by that context, not by the page | Portal the modal to `<body>` (or the framework's portal primitive) so it escapes the stacking context, or hoist the stacking-context owner so the modal sits inside it at the right layer. Auditing tip: `position: fixed` does NOT escape a `transform` ancestor's stacking context |
+| `-webkit-autofill` paints inputs yellow and ignores dark-mode surface color | Safari and Chrome apply a non-styleable background to autofilled inputs; CSS `background-color` does not win | Override via box-shadow trick: `input:-webkit-autofill { -webkit-box-shadow: 0 0 0 30px var(--surface) inset; -webkit-text-fill-color: var(--text); transition: background-color 9999s ease-out 0s; }`. Set both light and dark variants; verify in both modes |
+| Font-swap CLS persists even with `size-adjust` | `size-adjust` alone only scales the glyph size; line metrics (ascent, descent, line-gap) still differ from the web font and the swap shifts layout | Use the full metrics-override set on the fallback `@font-face`: `ascent-override`, `descent-override`, `line-gap-override`, and `size-adjust` tuned to the web font. The fallback then occupies the same vertical space as the web font, so the swap is invisible. Tools like `fontaine` or `next/font` compute the values; calibrate manually by sampling the web font's metrics |
+| Modal opens but the background is still announced by the screen reader | `inert` was applied to the wrong ancestor, or `aria-hidden="true"` was applied to the document body while the modal lives inside the body (hiding the modal too) | Apply `inert` to every sibling of the dialog at its level (not to the body, not to a parent of the dialog). With a top-layer `<dialog>` element `inert` is automatic on the rest of the page; with a portalled modal in body, mark all OTHER children of body `inert` while the modal is open and restore on close. Never put `aria-hidden` on an ancestor that contains the modal |
 
 ## Programmatic Geometry Sweep
 

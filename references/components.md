@@ -1,3 +1,14 @@
+---
+title: Component Discipline
+purpose: Standardizing repeated widgets across pages, defining canonical component contracts, slot-based composition, and detecting drift before it ships.
+load-when:
+  task-keywords: [component, widget, contract, extraction, slots, composition, Storybook, tokens, design]
+  symptoms: [duplicate id, score dropped, viewport overflow, dark mode broken]
+prereq: SKILL.md
+related: [audit-workflow.md, defects.md, design.md, ui-ux.md]
+size: ~330 lines
+---
+
 # Component Discipline
 
 Framework-agnostic guidance on standardizing repeated widgets across pages, defining component contracts, and detecting drift before it ships. Polishing each instance separately is not enough: same-purpose widgets must follow one canonical visual and content contract.
@@ -70,6 +81,16 @@ A widget is ready for extraction when every item below is true. Before declaring
 
 A component shipped without these answers is half-built and will drift on the next page.
 
+## Server vs Client Boundary
+
+State the boundary at the top of the contract. A component that tries to be both fails both: it ships client JS for behaviour that only runs on the server, or it skips hydration for behaviour that only runs on the client. Reject the in-between.
+
+- **Server boundary**: no event handlers, no client state, no browser-only APIs (`window`, `document`, `localStorage`, `IntersectionObserver`). Renders on the server (or at build time), ships zero client JS for itself. Pattern matches the modern server-component model: data fetch, layout, semantic markup, the page's static skeleton.
+- **Client boundary**: interactive, hydrated, owns its event handlers and its local state. Ships the JS needed to drive its behaviour. Pattern matches a client island: a modal, a popover, a tab strip, an autocomplete.
+- **Hybrid is a defect**: a "server" component that calls a hook, attaches a listener, or reads `window` will explode in a server runtime or skip hydration silently. A "client" component that does no interactive work pays for hydration without earning it.
+
+Declare the boundary in the contract header (a JSDoc tag, a top-of-file comment, a directive the framework recognises). Lint or type-check rejects components that import a server-only module from a client boundary, or a browser-only API from a server boundary.
+
 ## Extraction Sequence
 
 Follow this sequence. Skipping a step turns extraction into yet another duplicated markup variant.
@@ -83,6 +104,26 @@ Follow this sequence. Skipping a step turns extraction into yet another duplicat
 7. Re-render every route that uses the widget. A single broken instance proves the component is incomplete.
 8. Compare every instance side-by-side at both audit viewports. If two instances do not look like members of the same system, the contract is wrong or the variant set is incomplete.
 
+## Versioning and Breaking Changes
+
+The canonical contract is an API. Treat it like one. The component family carries a semver, the consumers know which version they are on, and breaking changes ship with a migration path.
+
+- **Patch (`x.y.Z`)**: bug fix that does not change the contract. A focus ring that was 2 px is now 3 px to pass contrast; a margin that was 16 px is now 24 px to match the token. Consumers pick up the fix on the next install with no code change.
+- **Minor (`x.Y.0`)**: backward-compatible addition. A new optional prop, a new named variant, a new slot, an additional state. Existing call sites keep working unchanged.
+- **Major (`X.0.0`)**: removed prop, removed variant, renamed slot, changed default behaviour, changed required-vs-optional, changed semantic markup in a way that affects accessibility wiring. Existing call sites need an update.
+
+Deprecation discipline for any planned removal:
+
+- Mark the prop, variant, or slot with `@deprecated` JSDoc and a short reason. Type checkers and editors surface the warning at every call site.
+- Emit a one-line `console.warn` in development builds (gated by `process.env.NODE_ENV !== "production"` or the framework equivalent). Production stays silent. The warning names the deprecated thing and points at the migration.
+- Link the migration codemod from the deprecation message, not from a separate changelog entry. The deprecation goes:
+
+```text
+[component] prop `size="huge"` is deprecated; use the `<header slot>` instead. Run `npx your-codemod component-size-huge` to migrate. Removed in v3.0.0.
+```
+
+- The codemod ships with the deprecation, not after the removal. A deprecation without a migration path is a future breakage.
+
 ## What To Avoid
 
 These four anti-patterns produce most cross-page drift.
@@ -92,6 +133,18 @@ These four anti-patterns produce most cross-page drift.
 - Fixing drift by adding more one-off CSS selectors. Page-local overrides reduce the symptom and reproduce the disease at the next site of drift.
 - Making one component so generic that every call site needs overrides to look right. Generic components without strong defaults push the styling burden back to the page, which is where the drift lives.
 - Hardcoding a DOM `id` (or an `aria-controls` / `aria-labelledby` target) inside a reusable component. Rendered more than once on a page it produces duplicate ids: invalid HTML, a Lighthouse `duplicate-id` (or axe `duplicate-id-aria`) failure, and broken ARIA wiring (a label or control points at the wrong instance). Generate a unique id per instance and namespace children under it.
+
+## Slots and Composition Over Prop Explosion
+
+The over-generic-component anti-pattern resolves to slots, not more props. When a component needs to vary by structure (a card with an optional badge above the title, a section with an optional aside, a hero with an optional footnote), exposing a slot keeps the component small AND the call site readable. Exposing another shape prop produces a god-component that nobody can use without reading its source.
+
+The rule: if you would need three or more shape props (props that change which elements render, not props that change what those elements contain), use a slot instead.
+
+- A slot is `children` (the default slot), named slots like `<header>` and `<footer>` (web components, single-file frameworks), or render props (component-as-function patterns). Whichever the framework supports, expose composition explicitly.
+- Reach for slots when the variation is structural: optional sections, optional decorations, optional adjacent content.
+- Stay on props when the variation is data: title text, image URL, CTA label, variant name (one named variant prop, not a knob per CSS property).
+- Composed components stay testable: each slot has a known contract; the parent does not need to know what fills it.
+- Slots prevent the prop explosion -> drift cycle: when adding a fourth shape prop is the only way to support a new variant, the call site eventually wires the props together inconsistently and the family drifts again.
 
 ## Drift Detection
 
@@ -242,6 +295,29 @@ Performance treatment of images and fonts lives in [performance.md](performance.
 ### Visible text is the accessible name
 
 Do not hide visible text behind a mismatched `aria-label`. If the visible text names the control well, let it be the accessible name. When a control is icon-only, the `aria-label` matches the visible meaning the icon conveys.
+
+## Component Playground Discipline
+
+A component playground (Storybook, Histoire, Ladle, or any component workshop) is where the contract is exercised in isolation. If a state is not in a story, it is not in the contract.
+
+- **One story per variant**: every named variant in the contract has its own story. Reviewers compare variants side-by-side without spinning up the host app.
+- **One matrix story per family**: a single story renders every state-by-prop combination on one page. Resting, hover, focus, disabled, loading, error; primary, secondary, ghost; small, medium, large. The matrix catches the unrendered combinations before a designer has to.
+- **Visual regression on the story tree, not on integration screens**: snapshot each story and the matrix story; gate PRs on the story-tree diff. Integration-level visual tests are flaky (data shifts, animations time out) and miss component-level drift. Story-level tests are deterministic.
+- **Interaction tests live next to stories**: a story that exercises an interaction (click, focus, submit) carries its own play function and assertions. The playground is the test surface for the contract.
+- **Stories ship with the component**, in the same package, in the same review. A component without stories is not done.
+
+## Token Transformation Pipeline
+
+Design tokens live in one place, not in CSS, JS, iOS, Android, and Figma independently. A transformation pipeline takes the single source of truth and emits every target output. Choose ONE pipeline; mixing them produces drift between targets.
+
+- **Source format**: a single JSON or YAML file (or a small directory of them) that defines color, spacing, typography, radius, shadow, motion, and z-index tokens with semantic names. The W3C Design Tokens Community Group format is the standard worth aiming for: it is platform-neutral and tool-agnostic, so the source survives a future tool change.
+- **Pipelines that read the source**:
+  - **Style Dictionary**: mature, scriptable, emits CSS variables, JS exports (ESM and CJS), iOS Swift, Android XML, and arbitrary custom formats via JS templates. Use when the team wants to control the pipeline and ship to multiple platforms.
+  - **Tokens Studio**: Figma plugin that round-trips tokens between design and code; integrates with Style Dictionary as the build step. Use when designers own the tokens and need a Figma-first edit surface.
+  - **W3C DTCG-compatible CLI**: a smaller, format-faithful build that emits whichever targets the project needs without the broader Style Dictionary surface. Use when the project commits to the W3C format and wants the lowest pipeline complexity.
+- **Outputs to emit by default**: CSS custom properties (a `:root` block per theme), a JS or TS export module, optionally platform-specific outputs (iOS, Android) when relevant.
+- **Pipeline runs in CI**: the build emits the outputs from the source on every commit; the outputs are committed (or generated and consumed inline). A drift between source and output is the kind of bug that ships unnoticed.
+- **No raw hex, raw px, or raw ms in component CSS**: every value comes from a token. Lint enforces it.
 
 ## See Also
 
