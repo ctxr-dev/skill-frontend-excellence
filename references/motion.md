@@ -1,35 +1,32 @@
 ---
 title: Motion and Animation
-purpose: Framework-agnostic guidance on motion that conveys meaning, performs at 60fps, respects user preferences, and uses the modern platform primitives (View Transitions, WAAPI, scroll-driven, @starting-style).
+purpose: Framework-agnostic motion that conveys meaning, holds 60fps, respects user preferences, and uses modern platform primitives (View Transitions, WAAPI, scroll-driven, @starting-style). Every above-the-fold animation ships only inside the LCP/TBT/CLS budget.
 load-when:
-  task-keywords: [motion, animation, transition, easing, View Transitions, scroll-driven, WAAPI, will-change, "@starting-style", reduced motion]
+  task-keywords: [motion, animation, transition, easing, View Transitions, scroll-driven, WAAPI, will-change, "@starting-style", reduced motion, INP, CLS]
   symptoms: [INP regression, slow interaction, CLS regression, score dropped]
 prereq: SKILL.md
 related: [performance.md, accessibility.md, ui-ux.md, design.md]
-size: ~660 lines
+size: ~688 lines
 ---
 
 # Motion and Animation
 
-Framework-agnostic principles for motion that conveys meaning, performs at 60fps, and respects user preferences.
+Motion is a tool, not decoration. It earns its place only by doing one of four jobs; otherwise remove it.
 
 ## Why Motion
 
-Motion is a tool, not decoration. It exists to:
-
-1. **Communicate cause and effect.** A button press triggers a state change; the motion confirms it.
-2. **Maintain spatial continuity.** Where did this element come from? Where does it go?
-3. **Direct attention.** Animate what the user should look at next.
-4. **Express brand personality.** Spring bounces feel playful; linear fades feel refined.
-
-If a motion doesn't serve one of these, remove it.
+- Communicate cause and effect: a button press triggers a state change and the motion confirms it.
+- Maintain spatial continuity: show where an element came from and where it goes.
+- Direct attention: animate what the user should look at next.
+- Express brand personality: spring bounces feel playful, linear fades feel refined.
+- If a motion serves none of cause/effect, spatial continuity, attention, or brand: remove it.
 
 ## The Four Properties of UI Motion
 
-| Property | Default | Range |
-|----------|--------|-------|
+| Property | Default | Range / Rule |
+|----------|---------|--------------|
 | Duration | 200-250ms (UI), 300-400ms (modal/page transition) | 100-500ms; rarely above 500ms in UI |
-| Easing | `ease-out` for entering, `ease-in` for exiting | Linear forbidden in UI |
+| Easing | `ease-out` entering, `ease-in` exiting | `linear` forbidden in UI |
 | Trigger | User action or state change | Time alone (idle) is decorative |
 | Interruptibility | Always interruptible | Never block input |
 
@@ -47,24 +44,21 @@ If a motion doesn't serve one of these, remove it.
 | Onboarding sequence | 400-600ms per beat |
 | Skeleton shimmer | 1500ms loop, low contrast |
 
-Above 500ms feels slow in UI. Reserve for one-off cinematic moments.
-
-Exit motions should be 60-70% of entrance duration. The user already saw the content arrive; getting it out of the way faster feels responsive.
+- Above 500ms feels slow in UI: reserve for one-off cinematic moments.
+- Exit motions should be 60-70% of entrance duration so getting content out of the way feels responsive.
 
 ## Easing
 
-Easing curves give motion personality.
-
 | Curve | Use |
 |-------|-----|
-| `ease-out` (`cubic-bezier(0, 0, 0.2, 1)`) | Entering. Element decelerates as it arrives. |
-| `ease-in` (`cubic-bezier(0.4, 0, 1, 1)`) | Exiting. Element accelerates as it leaves. |
-| `ease-in-out` (`cubic-bezier(0.4, 0, 0.2, 1)`) | State change in place. Symmetric. |
+| `ease-out` (`cubic-bezier(0, 0, 0.2, 1)`) | Entering: element decelerates as it arrives. |
+| `ease-in` (`cubic-bezier(0.4, 0, 1, 1)`) | Exiting: element accelerates as it leaves. |
+| `ease-in-out` (`cubic-bezier(0.4, 0, 0.2, 1)`) | Symmetric state change in place. |
 | `ease` (`cubic-bezier(0.25, 0.1, 0.25, 1)`) | Default; usable but generic. |
-| Spring | Playful or characterful. Use a physics-based library. |
-| `linear` | NEVER for UI motion. Reserved for continuous loops (loading spinners) and progress bars. |
+| Spring | Playful or characterful: use a physics-based library (stiffness, damping, mass). |
+| `linear` | NEVER for UI motion. Reserved for continuous loops (spinners) and progress bars. |
 
-Material Design 3 standard curves (consider these defaults):
+Material Design 3 standard curves (usable defaults):
 
 - Standard: `cubic-bezier(0.2, 0, 0, 1)`
 - Decelerated (entering): `cubic-bezier(0, 0, 0, 1)`
@@ -77,11 +71,11 @@ Apple-style spring curves (CSS):
 - Quick snap: `cubic-bezier(0.4, 1.5, 0.5, 1)` (quicker overshoot)
 - Reduced motion: `cubic-bezier(0.4, 0, 0.2, 1)` (no overshoot)
 
-For genuinely physics-based motion, use a library (Motion / Framer Motion, React Spring, GSAP). Spring physics with stiffness, damping, mass produces natural-feeling motion that handcrafted bezier curves rarely match.
+For genuinely physics-based motion, use a library with stiffness, damping, mass; that natural feel is one bezier curves rarely match.
 
 ### CSS `linear()` for spring approximations
 
-The `linear()` easing function (Baseline 2024) takes a list of stops and interpolates linearly between them, which lets you approximate a spring (or any arbitrary curve) in pure CSS, without a library and without the JS cost of a physics simulation.
+`linear()` (Baseline 2024) takes a list of stops and interpolates linearly between them, approximating a spring or any arbitrary curve in pure CSS, no library and no JS physics simulation.
 
 ```css
 .bounce {
@@ -94,32 +88,26 @@ The `linear()` easing function (Baseline 2024) takes a list of stops and interpo
 }
 ```
 
-You do not write these stops by hand. Generate them once from a spring (stiffness, damping, mass) with a tool like `linear()` generator, then paste into CSS. The result: spring-physics motion that runs on the compositor with no main-thread cost, and that respects `prefers-reduced-motion` through the normal CSS path. Use this in place of hand-rolled cubic-bezier-fit-to-spring (which never quite matches) and in place of JS spring libraries for the common "snap with overshoot" feel.
+Do not hand-write the stops. Generate them once from a spring (stiffness, damping, mass) with a `linear()` generator tool, then paste into CSS. The result runs on the compositor with no main-thread cost and respects `prefers-reduced-motion` through the normal CSS path. Use it in place of hand-rolled cubic-bezier-fit-to-spring and JS spring libraries for the common snap-with-overshoot feel.
 
-## What to Animate (and what NOT to animate)
+## What to Animate (and What NOT to Animate)
 
-### Animate
+Animate (compositor-only, run on the GPU, hold 60fps, no layout/paint):
 
 - `transform` (translate, rotate, scale)
 - `opacity`
 - `filter` (sparingly)
 - `clip-path` (modern browsers)
 
-These compositor-only properties run on the GPU and don't trigger layout or paint. They hold 60fps.
+NEVER animate:
 
-### NEVER animate
+- `width`, `height`, `top`, `left`, `right`, `bottom`, `margin`, `padding`, `font-size`: they trigger layout, then paint, then composite.
+- `box-shadow` size (only its `opacity` is cheap).
+- Anything that changes layout for surrounding elements.
 
-- `width`, `height`, `top`, `left`, `right`, `bottom`, `margin`, `padding`, `font-size`
-- `box-shadow` size (only opacity is cheap)
-- Anything that changes layout for surrounding elements
+For expanding/collapsing, use `transform: scale()` plus `clip-path`, or the `view-transition` API for layout transitions.
 
-These trigger layout, then paint, then composite. Each is expensive. Animating them at 60fps is impossible on most devices.
-
-For "expanding" or "collapsing" elements, use `transform: scale()` plus `clip-path`, or use the `view-transition` API for layout transitions.
-
-### When you must animate layout
-
-Use FLIP (First, Last, Invert, Play):
+### When you must animate layout: FLIP
 
 1. Measure the element's First position.
 2. Apply the change.
@@ -127,13 +115,11 @@ Use FLIP (First, Last, Invert, Play):
 4. Compute the Invert transform.
 5. Animate transform from inverted to identity (Play).
 
-Libraries like Motion's layout animations and React's `useLayoutEffect` patterns implement this for you.
-
-For full route or DOM transitions, the new `view-transition` API is the right tool.
+For full route or DOM transitions, the `view-transition` API is the right tool.
 
 ## Web Animations API
 
-CSS animations are the right default for declarative, repeatable motion. The Web Animations API (`element.animate()`, `Animation`, `getAnimations()`) is the right tool the moment motion becomes stateful, interruptible, dynamic, or coordinated across elements at runtime.
+CSS animations are the default for declarative, repeatable motion. Reach for the Web Animations API (`element.animate()`, `Animation`, `getAnimations()`) the moment motion becomes stateful, interruptible, dynamic, or coordinated across elements at runtime.
 
 ```js
 const anim = card.animate(
@@ -146,22 +132,22 @@ anim.onfinish = () => anim.commitStyles();
 
 What WAAPI does that CSS cannot:
 
-- **Interruptible.** `anim.pause()`, `anim.cancel()`, `anim.reverse()`, `anim.playbackRate = 0.5`. Interrupting a CSS animation cleanly requires class juggling and timing hacks.
-- **Coordinated.** `getAnimations()` returns every running animation on the page. Use it to pause every motion on a route change, or to drive a "are we still animating?" gate.
-- **Stateful.** `commitStyles()` writes the current animation values to the element's inline style, so finishing an animation leaves the element in its end state without `fill: forwards` quirks. Essential for animations whose start state depends on the previous animation's end.
-- **Dynamic keyframes.** Pass arbitrary computed keyframe objects, including values you computed from the DOM measurement two lines earlier. CSS animations cannot accept runtime-computed values.
+- Interruptible: `anim.pause()`, `anim.cancel()`, `anim.reverse()`, `anim.playbackRate = 0.5`. CSS cannot interrupt cleanly.
+- Coordinated: `getAnimations()` returns every running animation on the page, to pause all motion on a route change or gate an is-animating check.
+- Stateful: `commitStyles()` writes current values to inline style, so the element ends in its end state without `fill: forwards` quirks.
+- Dynamic keyframes: accepts arbitrary computed keyframe objects with runtime DOM-measured values, which CSS cannot.
 
 Reach for WAAPI when:
 
-- You need to start an animation, then interrupt it on a user gesture (cancel on click, reverse on hover-out, pause during a drag).
-- You are running a FLIP layout animation and the keyframes depend on measured before / after positions.
-- You need to coordinate animations across multiple elements with shared timing or a single global controller.
+- You start an animation then interrupt it on a user gesture (cancel on click, reverse on hover-out, pause during a drag).
+- You run a FLIP layout animation whose keyframes depend on measured before/after positions.
+- You coordinate animations across multiple elements with shared timing or a single global controller.
 
-Stay with CSS animations for: hover effects, static reveals, skeleton loops, simple modal entrances, anything where the same animation always plays the same way.
+Stay with CSS animations for hover effects, static reveals, skeleton loops, simple modal entrances: anything where the same animation always plays the same way.
 
 ## Reduced Motion
 
-Always respect `prefers-reduced-motion: reduce`. The "global stomp" pattern is the floor:
+Always respect `prefers-reduced-motion: reduce`. The global stomp is the floor:
 
 ```css
 @media (prefers-reduced-motion: reduce) {
@@ -174,19 +160,13 @@ Always respect `prefers-reduced-motion: reduce`. The "global stomp" pattern is t
 }
 ```
 
-Better practice: tier your animations.
+Better: tier the motion.
 
-- **Essential** (a loading spinner conveying activity, a progress bar showing percent): keep, even with reduced motion.
-- **Helpful** (a slide-in modal, a fade-in card): replace with instant transitions.
-- **Decorative** (parallax, scroll-triggered reveals, hero text staggered animations): remove entirely.
+- Essential (loading spinner conveying activity, progress bar showing percent): keep.
+- Helpful (slide-in modal, fade-in card): replace with instant transitions.
+- Decorative (parallax, scroll-triggered reveals, hero text staggered animations): remove entirely.
 
 ```css
-.hero-letters span {
-  opacity: 0;
-  transform: translateY(20px);
-  animation: rise 600ms ease-out forwards;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .hero-letters span {
     opacity: 1;
@@ -196,7 +176,7 @@ Better practice: tier your animations.
 }
 ```
 
-For JS animations, check the user preference:
+For JS animations, check the preference first:
 
 ```js
 const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -205,26 +185,23 @@ if (!prefersReduced) {
 }
 ```
 
+See accessibility.md for full reduced-motion treatment.
+
 ## Choreography
 
-When multiple elements animate, choreograph them. Don't let everything animate at once.
+When multiple elements animate, choreograph them; do not let everything animate at once.
 
 ### Stagger
 
-For lists or grids, stagger entries by 30-50ms. The user sees a sequence rather than a flash.
+- Stagger list/grid entries by 30-50ms so the user sees a sequence, not a flash.
+- Cap stagger at 8-10 items so the last item is not obviously waiting.
 
 ```css
-.list > * {
-  animation: rise 400ms ease-out backwards;
-}
-
+.list > * { animation: rise 400ms ease-out backwards; }
 .list > *:nth-child(1) { animation-delay: 0ms; }
 .list > *:nth-child(2) { animation-delay: 50ms; }
 .list > *:nth-child(3) { animation-delay: 100ms; }
-/* etc */
 ```
-
-Or programmatically:
 
 ```js
 items.forEach((item, i) => {
@@ -232,21 +209,17 @@ items.forEach((item, i) => {
 });
 ```
 
-Cap stagger at 8-10 items so the last item isn't obviously waiting.
-
 ### Sequence
 
-For a hero load: heading first, then sub-heading, then CTAs, then image. Each beat 100-200ms after the previous start.
+Hero load: heading first, then sub-heading, then CTAs, then image. Each beat 100-200ms after the previous start.
 
-### Co-ordinated entry/exit
+### Coordinated entry/exit
 
 Modal: backdrop fades in (200ms), then dialog scales up + fades in (250ms). On exit: dialog scales down + fades out (180ms), then backdrop fades out (150ms).
 
 ## Scroll-Triggered Motion
 
 ### CSS-only (preferred)
-
-Modern CSS supports scroll-driven animations:
 
 ```css
 .fade-in-on-scroll {
@@ -262,15 +235,17 @@ Modern CSS supports scroll-driven animations:
 }
 ```
 
-Browser support is improving. With `IntersectionObserver` as fallback, this covers most cases.
+Use `IntersectionObserver` as a fallback to cover most cases.
 
-### `animation-timeline: scroll()` for scroll-progress
+### `scroll()` vs `view()` (both Baseline 2024)
 
-`view()` (above) ties an animation to an element entering or leaving the viewport. `scroll()` ties an animation to the scroll position of a scroll container itself, from 0 percent (top) to 100 percent (bottom). Both are Baseline 2024.
+- `view()` ties an animation to an element entering/leaving the viewport (is-this-element-visible).
+- `scroll()` ties an animation to a scroll container's position, 0% (top) to 100% (bottom) (where-in-the-document-am-I).
+- Both run on the compositor at 60fps and respect `prefers-reduced-motion`.
 
-Canonical uses for `scroll()`:
+Canonical `scroll()` uses:
 
-- **Reading progress bar.** A bar that fills as the user scrolls the article. Zero JS.
+- Reading progress bar, zero JS:
 
 ```css
 .progress {
@@ -285,10 +260,8 @@ Canonical uses for `scroll()`:
 @keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 ```
 
-- **Sticky-fade header.** Header background opacity rises from 0 to 1 over the first 100 to 200px of scroll, giving the header a transparent state on hero and an opaque state on body. No scroll listener.
-- **Section-position indicator.** A side-nav dot that moves down a vertical track as the page scrolls.
-
-Use `scroll()` for "where in the document am I" effects. Use `view()` for "is this element visible" effects. Both run on the compositor at 60fps and respect `prefers-reduced-motion` through the standard CSS path.
+- Sticky-fade header: background opacity rises from 0 to 1 over the first 100 to 200px of scroll, no scroll listener.
+- Section-position indicator: a side-nav dot moves down a vertical track as the page scrolls.
 
 ### Intersection Observer (universal)
 
@@ -305,8 +278,6 @@ const observer = new IntersectionObserver((entries) => {
 document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
 ```
 
-Then in CSS:
-
 ```css
 .reveal {
   opacity: 0;
@@ -322,15 +293,14 @@ Then in CSS:
 
 ### Anti-patterns
 
-- Every section animates as you scroll. The page feels like it's still loading when you reach the bottom.
-- Parallax on every section. Disorienting. Often hurts CLS.
-- Long animations triggered by scroll. The user has already moved past the trigger point.
-
-Animate selectively. One or two key sections per page.
+- Every section animating on scroll: the page feels like it is still loading at the bottom.
+- Parallax on every section: disorienting and often hurts CLS.
+- Long animations triggered by scroll: they fire after the user has moved past the trigger.
+- Fix: animate selectively, one or two key sections per page.
 
 ## Page Transitions
 
-For SPA route changes:
+SPA route change:
 
 ```css
 ::view-transition-old(root),
@@ -339,36 +309,20 @@ For SPA route changes:
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-::view-transition-old(root) {
-  animation-name: fade-out;
-}
-
-::view-transition-new(root) {
-  animation-name: fade-in;
-}
+::view-transition-old(root) { animation-name: fade-out; }
+::view-transition-new(root) { animation-name: fade-in; }
 ```
 
-For shared element transitions (e.g., a card in a list expands into a detail view):
+Shared element transition: matching `view-transition-name` on both elements makes the browser auto-morph between them.
 
 ```css
-.card-image {
-  view-transition-name: card-image;
-}
-
-.detail-image {
-  view-transition-name: card-image;
-}
+.card-image { view-transition-name: card-image; }
+.detail-image { view-transition-name: card-image; }
 ```
-
-The browser automatically morphs between them.
-
-For frameworks without `view-transition` support, libraries like Motion provide layout animations.
 
 ### Cross-document View Transitions (MPA)
 
-Same-document View Transitions (the SPA case above) ship in every Chromium-based browser and Safari. The cross-document variant, which animates between two full-document navigations (the multi-page app case), is the newer release: Chrome 126+ and Safari 18+. Firefox is rolling it out; treat it as progressive enhancement.
-
-A single line of CSS opts the whole site into automatic cross-page transitions:
+Ships in Chrome 126+ and Safari 18+; Firefox is rolling it out, so treat it as progressive enhancement. One line opts the whole site into cross-page transitions, no JS, router, or framework:
 
 ```css
 @view-transition {
@@ -376,41 +330,32 @@ A single line of CSS opts the whole site into automatic cross-page transitions:
 }
 ```
 
-That is it. No JS, no router integration, no framework. The browser captures the outgoing document, fetches and parses the incoming one, then crossfades the two as the new page renders. Shared element transitions across the page boundary work the same way: matching `view-transition-name` values on the outgoing and incoming pages auto-morph between them.
+The browser captures the outgoing document, fetches and parses the incoming one, then crossfades as the new page renders. Shared elements across the boundary auto-morph by matching name:
 
 ```css
 .product-image { view-transition-name: product-hero; }
 ```
 
-Constraints to know:
+Constraints:
 
-- Same-origin only. The browser will not transition across origins.
+- Same-origin only: the browser will not transition across origins.
 - Both navigations must opt in (`@view-transition { navigation: auto }` in the CSS of both pages).
-- Firefox without support degrades to a normal navigation, no transition. The page still works.
-
-Use this for static sites, server-rendered apps, and any MPA where the perceived-instant feeling of an SPA was the reason teams chose a client-side router. Cross-doc View Transitions remove that reason.
+- Firefox without support degrades to a normal navigation, no transition; the page still works.
 
 ## Loading and Progress Indicators
 
 ### Spinner
 
-For < 1s waits. Linear rotation, infinite, 800-1000ms per revolution.
+For < 1s waits: linear rotation, infinite, 800-1000ms per revolution. Add `aria-label="Loading"` (or wrap in a container with one).
 
 ```css
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.spinner {
-  animation: spin 800ms linear infinite;
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { animation: spin 800ms linear infinite; }
 ```
-
-Add `aria-label="Loading"` (or wrap in a container with one).
 
 ### Skeleton screen
 
-For 300ms+ waits. Match the eventual layout. Animate a subtle shimmer.
+For 300ms+ waits: match the eventual layout, animate a subtle shimmer. Mark with `aria-busy="true"` and `aria-live="polite"` so screen readers announce when content arrives.
 
 ```css
 .skeleton {
@@ -430,11 +375,9 @@ For 300ms+ waits. Match the eventual layout. Animate a subtle shimmer.
 }
 ```
 
-Mark with `aria-busy="true"` and `aria-live="polite"` so SRs announce when content arrives.
-
 ### Progress bar
 
-For determinate progress. Animate `transform: scaleX()` from 0 to 1, not `width`.
+For determinate progress, animate `transform: scaleX()` from 0 to 1, not `width`.
 
 ```css
 .progress-bar {
@@ -448,62 +391,33 @@ For determinate progress. Animate `transform: scaleX()` from 0 to 1, not `width`
 
 ## Hover and Press Effects
 
-### Button hover
-
-Subtle: shift background by one tone, change border, raise by 1-2px.
+- Button hover: shift background by one tone, change border, raise by 1-2px.
+- Card hover: lift slightly, subtle shadow change.
+- Press scale: subtle 0.95-0.98 scale on press, restore on release.
+- Mobile: rely on `:active`; the browser handles touch feedback.
 
 ```css
 .btn {
   transition: transform 150ms ease-out, background 150ms ease-out;
 }
+.btn:hover { transform: translateY(-1px); background: var(--primary-hover); }
+.btn:active { transform: translateY(0) scale(0.98); transition-duration: 50ms; }
 
-.btn:hover {
-  transform: translateY(-1px);
-  background: var(--primary-hover);
-}
-
-.btn:active {
-  transform: translateY(0) scale(0.98);
-}
-```
-
-### Card hover
-
-Lift slightly, subtle shadow change.
-
-```css
 .card {
   transition: transform 200ms ease-out, box-shadow 200ms ease-out;
 }
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-elevated);
-}
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-elevated); }
 ```
 
-### Press scale
+## Modal / Sheet Entrance
 
-For tappable cards/buttons: subtle 0.95-0.98 scale on press, restore on release.
+### Open-from-closed (`@starting-style`)
 
-```css
-.btn:active {
-  transform: scale(0.97);
-  transition-duration: 50ms;
-}
-```
+Animating an element toggling `display: none` to `display: block` (the natural state for popovers, dialogs, toasts) is now native via three features together, the canonical way to animate open from closed:
 
-Mobile: rely on `:active`. The browser handles touch feedback.
-
-## Modal/Sheet Entrance
-
-### Open-from-closed transitions (`@starting-style`)
-
-Transitioning an element that toggles between `display: none` and `display: block` (the natural state for popovers, dialogs, and toasts) used to require JS choreography because `display` is a discrete property and `none` to `block` has no animatable intermediate. Three modern features fix this; together they are now the canonical way to animate popovers and dialogs open from closed.
-
-- `@starting-style { ... }` declares the styles the element takes the moment it enters the DOM (or transitions out of `display: none`). The browser interpolates from the starting-style values to the active styles.
-- `transition-behavior: allow-discrete` lets the browser animate discrete properties (including `display`) over the transition duration instead of snapping at the boundaries.
-- `transition: display ...` combined with the two above means `display: none` to `display: block` actually plays the transition.
+- `@starting-style { ... }` declares the styles the element takes the moment it enters the DOM (or leaves `display: none`); the browser interpolates from there to the active styles.
+- `transition-behavior: allow-discrete` lets the browser animate discrete properties (including `display`) over the duration instead of snapping at the boundaries.
+- `transition: display ...` combined with the two above makes `display: none` to `display: block` actually play.
 
 ```css
 [popover] {
@@ -529,9 +443,11 @@ Transitioning an element that toggles between `display: none` and `display: bloc
 }
 ```
 
-This is Baseline-modern (Chrome, Safari, Edge; Firefox shipping). Use it for popovers, dialogs, dropdowns, toasts, tooltips, and any element whose lifetime is "absent or present" rather than "always present, sometimes visible". The fallback on a browser without `@starting-style` is an instant snap, which degrades gracefully.
+Baseline-modern (Chrome, Safari, Edge; Firefox shipping). Use for popovers, dialogs, dropdowns, toasts, tooltips. Fallback without support is an instant snap that degrades gracefully.
 
 ### Modal (centered)
+
+Order: backdrop fades in, then modal fades + scales in 50ms after.
 
 ```css
 .modal {
@@ -539,40 +455,25 @@ This is Baseline-modern (Chrome, Safari, Edge; Firefox shipping). Use it for pop
   transform: scale(0.95);
   transition: opacity 200ms ease-out, transform 200ms ease-out;
 }
+.modal.open { opacity: 1; transform: scale(1); }
 
-.modal.open {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.modal-backdrop {
-  opacity: 0;
-  transition: opacity 200ms ease-out;
-}
-
-.modal-backdrop.open {
-  opacity: 1;
-}
+.modal-backdrop { opacity: 0; transition: opacity 200ms ease-out; }
+.modal-backdrop.open { opacity: 1; }
 ```
 
-Order: backdrop fades in, then modal fades + scales in (50ms after).
-
 ### Sheet (slides from edge)
+
+`translateY(100%)` puts it just below the visible area; the cubic-bezier approximates the iOS bottom-sheet overshoot.
 
 ```css
 .sheet-bottom {
   transform: translateY(100%);
   transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1);
 }
-
-.sheet-bottom.open {
-  transform: translateY(0);
-}
+.sheet-bottom.open { transform: translateY(0); }
 ```
 
-`translateY(100%)` puts it just below the visible area. iOS bottom sheets use a slight overshoot; the cubic-bezier above approximates that feel.
-
-### Dropdown/popover
+### Dropdown / popover
 
 ```css
 .popover {
@@ -582,7 +483,6 @@ Order: backdrop fades in, then modal fades + scales in (50ms after).
   transition: opacity 150ms ease-out, transform 150ms ease-out;
   pointer-events: none;
 }
-
 .popover.open {
   opacity: 1;
   transform: translateY(0) scale(1);
@@ -590,7 +490,7 @@ Order: backdrop fades in, then modal fades + scales in (50ms after).
 }
 ```
 
-## Toast/Snackbar
+## Toast / Snackbar
 
 Slide in from edge + fade. Auto-dismiss after 3-5s.
 
@@ -600,25 +500,19 @@ Slide in from edge + fade. Auto-dismiss after 3-5s.
   opacity: 0;
   transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), opacity 200ms ease-out;
 }
-
-.toast.show {
-  transform: translateY(0);
-  opacity: 1;
-}
-
-.toast.hide {
-  transform: translateY(100%);
-  opacity: 0;
-}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.hide { transform: translateY(100%); opacity: 0; }
 ```
 
 ## Hero Animations
 
-A well-orchestrated hero entrance can carry the entire page. Examples:
+### PRE-MERGE GATE (hero / above-the-fold)
+
+Any above-the-fold or hero animation ships ONLY with a Lighthouse run on the LCP page showing LCP, TBT, and CLS still inside budget. Visual and accessibility sign-off is NOT performance sign-off. If it cannot hold the budget, make it static or cut it. The default suspect is a per-frame JS-driven hero animation (writing attributes/styles each frame): prefer a CSS keyframe / compositor animation, or static.
 
 ### Staggered text rise
 
-Each word or letter rises and fades in sequentially.
+Cap at 8-10 items; beyond that the animation feels slow.
 
 ```css
 .hero-words span {
@@ -631,18 +525,13 @@ Each word or letter rises and fades in sequentially.
 .hero-words span:nth-child(1) { animation-delay: 100ms; }
 .hero-words span:nth-child(2) { animation-delay: 180ms; }
 .hero-words span:nth-child(3) { animation-delay: 260ms; }
-/* etc */
 
 @keyframes rise {
   to { opacity: 1; transform: translateY(0); }
 }
 ```
 
-Cap at 8-10 items. Beyond that, the animation feels slow.
-
 ### Image reveal
-
-A clip-path reveal that wipes from one edge.
 
 ```css
 .hero-image {
@@ -657,7 +546,7 @@ A clip-path reveal that wipes from one edge.
 
 ### Subtle parallax on hero
 
-The hero image drifts slowly as the user scrolls; capped to a few pixels:
+The hero image drifts slowly, capped to a few pixels. Throttle the scroll handler to 16ms (one frame).
 
 ```css
 .parallax-hero {
@@ -673,15 +562,11 @@ window.addEventListener('scroll', () => {
 });
 ```
 
-Throttle to 16ms (one frame).
-
-Anti-pattern: full-page parallax on every section. Disorienting and CLS-risky.
+Anti-pattern: full-page parallax on every section is disorienting and CLS-risky.
 
 ## Continuous / Ambient Motion
 
 Subtle ongoing motion gives a page life. Use sparingly.
-
-### Slow gradient shift
 
 ```css
 .ambient-bg {
@@ -689,33 +574,21 @@ Subtle ongoing motion gives a page life. Use sparingly.
   background-size: 200% 200%;
   animation: shift 30s ease-in-out infinite;
 }
-
 @keyframes shift {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
-```
 
-### Floating decoration
-
-A small element drifts up/down 4-8px continuously.
-
-```css
-.floating {
-  animation: float 4s ease-in-out infinite;
-}
-
+.floating { animation: float 4s ease-in-out infinite; }
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
 ```
 
-### When to disable
+A floating decoration drifts up/down 4-8px continuously. Disable continuous motion when:
 
-Continuous motion drains battery. Disable when:
-
-- The page is not in the active tab (`document.visibilitychange`).
+- The page is not in the active tab (`document.visibilitychange`), to save battery.
 - The user prefers reduced motion.
 - The element is off-screen.
 
@@ -729,55 +602,50 @@ const observer = new IntersectionObserver((entries) => {
 
 ## Motion Budget and Measurement
 
-Motion is a budget like JS, CSS, and images. The budget is the main-thread work each animation costs and the total frames-per-second the page sustains. Measure, do not guess.
+Motion is a budget like JS, CSS, and images: main-thread work per animation and the total sustained fps. Measure, do not guess.
 
-### DevTools Animations panel
+### PRE-MERGE GATE (above-the-fold / hero)
 
-Chrome DevTools has a Performance > Animations panel that captures every running animation, names them, and shows timing, easing, and which thread they run on. Open it during a page load or a route transition; anything that is not compositor-only (transform, opacity, filter) shows up in red. Use it as the first stop when an interaction feels sluggish.
+Same gate as Hero Animations, restated as the budget rule: any above-the-fold or hero animation ships ONLY with a Lighthouse run on the LCP page showing LCP, TBT, and CLS still inside budget. Visual and accessibility sign-off is NOT performance sign-off. If it cannot hold the budget, make it static or cut it. A per-frame JS-driven hero animation (writing attributes/styles each frame) is the default suspect; prefer a CSS keyframe / compositor animation, or static.
 
-The Performance panel itself remains the source of truth. Record an interaction, look for Long Animation Frames (LoAF) and tasks > 50ms, find the animation's stack frames. A 60fps motion has a 16.7ms frame budget; any frame past that drops below 60fps. Two consecutive long frames are perceptible.
+### Audit, threshold, and fix
+
+| Tool / metric | What it shows | Fix |
+|---------------|---------------|-----|
+| DevTools Performance > Animations panel | Every running animation; anything not compositor-only (transform, opacity, filter) shows up in red | Move to composited properties |
+| Performance panel: Long Animation Frames (LoAF), tasks > 50ms | Locate the animation's stack frames | Cut the long task in that frame |
+| Frame budget 16.7ms (60fps) | Any frame past that drops below 60fps; two consecutive long frames are perceptible | Shorten or composite the animation |
+| CPU throttle 4x or 6x in Performance settings | Reproduces jank on a fast machine | Record, inspect red long frames, move to a composited property or off-main-thread, re-record until green |
+| Target | Every motion holds 60fps on a 4x throttled CPU profile, which means it holds on the median real device | n/a |
 
 ### `will-change` hygiene
 
-`will-change` tells the browser to promote an element to its own compositor layer ahead of an animation, eliminating the layer-creation pause when the animation starts. Misused, it inflates GPU memory and makes the page slower.
+`will-change` promotes an element to its own compositor layer ahead of an animation, removing the layer-creation pause when it starts. Misused, it inflates GPU memory and slows the page.
 
-Rules:
-
-- Declare `will-change` ONLY immediately before the animation starts (on hover-intent, on the pointer-down that begins a drag, on the keypress that opens a panel). Add via class or `style.willChange = '...'` at the trigger.
-- Remove `will-change` as soon as the animation ends (on `animationend`, `transitionend`, or the WAAPI `Animation.finished` promise resolve). Leaving it on permanently consumes memory and can degrade other animations.
-- Never apply `will-change: transform` globally to large element classes (e.g., every card). The browser allocates a separate layer for each one.
-- Animate `transform` and `opacity` (composited) and you rarely need `will-change` at all. Animate anything that triggers layout and `will-change` does not save you; rewrite the animation.
-
-### Profiling a 60fps drop
-
-When motion feels janky on a slower device:
-
-1. Throttle CPU to 4x or 6x in DevTools Performance settings to reproduce on a fast machine.
-2. Record an interaction that includes the animation.
-3. Look at the frame chart. Any red bars are long frames.
-4. Open the long frame; find the task taking the most time (often layout, paint, or a script call inside a JS-driven animation).
-5. Move to a composited property, or move JS work off the main thread, or shorten the animation.
-6. Re-record to confirm the frame chart is green.
-
-A target: every motion holds 60fps on the throttled profile. A page that holds 60fps on a 4x throttled CPU will hold it on the median real device.
+- Declare `will-change` ONLY immediately before the animation starts (on hover-intent, the pointer-down beginning a drag, the keypress opening a panel) via class or `style.willChange`.
+- Remove it as soon as the animation ends (on `animationend`, `transitionend`, or the WAAPI `Animation.finished` resolve); leaving it on consumes memory and degrades other animations.
+- Never apply `will-change: transform` globally to large element classes (e.g., every card); the browser allocates a separate layer for each.
+- Animating `transform` and `opacity` (composited) rarely needs `will-change` at all. If a property triggers layout, `will-change` does not save you; rewrite the animation.
 
 ## INP and Animation
 
-INP is impacted by animations that block the main thread. Composited-only animations (transform, opacity) don't impact INP. Layout-triggering animations and JS-driven animations can.
+Composited-only animations (transform, opacity) don't impact INP; layout-triggering and JS-driven animations can. If INP regresses after adding animation:
 
-If INP regresses after adding animation:
+| Cause | Fix |
+|-------|-----|
+| Animation triggers layout | Move to transform/opacity |
+| JS animation runs every frame | Use CSS animations or `web-animations-api` |
+| Animation runs during page load | Defer until after `load` |
 
-- Check if the animation triggers layout. Move to transform/opacity.
-- Check if a JS animation is running on every frame. Use CSS animations or `web-animations-api` instead.
-- Check if the animation runs during page load. Defer until after `load`.
+See performance.md for INP attribution and budgets.
 
 ## CLS and Animation
 
-Animations that change element size cause layout shift. Avoid.
+- Animations that change element size cause layout shift: avoid them.
+- If you must animate size, use `transform: scale()` (compositor-only) and accept it is a visual approximation.
+- For accordion/disclosure, pre-measure content height and animate `max-height` to that exact value, or use `interpolate-size: allow-keywords` plus `transition: height` to animate to `auto`.
 
-If you must animate size, use `transform: scale()` (compositor-only) and accept that it's a visual approximation.
-
-For accordion/disclosure, pre-measure the content height and animate `max-height` to that exact value. Or use `interpolate-size: allow-keywords` (modern CSS) plus `transition: height` (now possible to animate to `auto`).
+See performance.md for full CLS treatment.
 
 ## Common Motion Mistakes
 
@@ -801,7 +669,7 @@ Before declaring work complete:
 
 - [ ] All animations use `transform` and/or `opacity` (no layout-triggering)
 - [ ] Durations 100-500ms with intentional choice per interaction
-- [ ] Easing chosen per direction (ease-out for in, ease-in for out)
+- [ ] Easing chosen per direction (`ease-out` for in, `ease-in` for out)
 - [ ] Exit faster than entrance (60-70%)
 - [ ] `prefers-reduced-motion` removes or shortens non-essential motion
 - [ ] No animation blocks user input (modals are interruptible)
@@ -810,9 +678,11 @@ Before declaring work complete:
 - [ ] Stagger capped at 8-10 items
 - [ ] Continuous motion paused when off-screen and tab inactive
 - [ ] No animation regresses LCP, INP, or CLS
+- [ ] PRE-MERGE GATE: every above-the-fold / hero animation has a Lighthouse run on the LCP page showing LCP, TBT, and CLS inside budget; per-frame JS-driven hero animations replaced with CSS keyframe / compositor or made static; if budget cannot hold, motion is cut
 
 ## See Also
 
-- [performance.md](performance.md) for animation cost
+- [performance.md](performance.md) for animation cost, INP attribution, and CLS budgets
 - [accessibility.md](accessibility.md) for reduced motion
 - [ui-ux.md](ui-ux.md) for state transitions
+- [design.md](design.md) for motion-driven brand expression

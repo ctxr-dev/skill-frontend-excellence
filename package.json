@@ -1,6 +1,6 @@
 {
   "name": "@ctxr/skill-frontend-excellence",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Agent Skills playbook (Claude Code, Codex CLI): framework-agnostic guide for shipping ultra-fast, accessible, search-friendly, visually distinctive web interfaces. Lighthouse mastery, UI/UX, design aesthetics, performance, accessibility, SEO, motion, forms, layout, data-viz, multi-page audit workflow, component standardization, geometry sweep.",
   "type": "module",
   "license": "MIT",
@@ -34,6 +34,7 @@
     "SKILL.md",
     "references/",
     "scripts/check-no-dashes.mjs",
+    "scripts/validate-structure.mjs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -52,7 +53,9 @@
     "lint": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
     "lint:fix": "markdownlint-cli2 --fix \"**/*.md\" \"#node_modules\"",
     "validate:no-dashes": "node scripts/check-no-dashes.mjs",
-    "validate": "npm run validate:no-dashes && npm run lint",
+    "validate:structure": "node scripts/validate-structure.mjs",
+    "validate:structure:fix": "node scripts/validate-structure.mjs --fix",
+    "validate": "npm run validate:no-dashes && npm run validate:structure && npm run lint",
     "prepare": "husky",
     "prepublishOnly": "npm run validate"
   },

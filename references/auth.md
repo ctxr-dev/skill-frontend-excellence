@@ -1,40 +1,32 @@
 ---
 title: Authentication Flows
-purpose: Flow-level authentication patterns: passkeys and WebAuthn, OAuth redirect UX, magic links, session expiry, account recovery, CAPTCHA placement, sign-in / sign-up structure, cross-tab session sync, and Storage Access API for embedded auth.
+purpose: Flow-level authentication patterns: passkeys and WebAuthn, OAuth redirect UX, magic links, session expiry, account recovery, CAPTCHA placement, sign-in and sign-up structure, cross-tab session sync, and Storage Access API for embedded sign-in. Input-level concerns (label, validation, autofill) live in forms.md.
 load-when:
-  task-keywords: [auth, authentication, login, signup, passkey, WebAuthn, OAuth, magic link, session, account recovery, CAPTCHA, Turnstile, Storage Access API]
+  task-keywords: [auth, authentication, login, signup, passkey, WebAuthn, OAuth, magic link, session, account recovery, CAPTCHA, Storage Access API]
   symptoms: [auth redirect loop, passkey not offered, focus not visible, focus trap leak]
 prereq: SKILL.md
 related: [forms.md, embed-patterns.md, security.md, accessibility.md]
-size: ~500 lines
+size: ~367 lines
 ---
 
 # Authentication Flows
 
-Framework-agnostic patterns for authentication FLOWS. The rules here govern redirects, sessions, recovery, second factors, and embedded sign-in. Input-level concerns (label, validation, autofill, error placement) belong in `forms.md`. Cross-link, do not duplicate.
-
-## Why This File Exists
-
-The sign-in form has two layers of concerns that age at different speeds.
-
-- `forms.md` handles INPUT-level concerns. Label, `autocomplete`, `aria-invalid`, error placement, multi-error focus return, password manager detection. These rules are stable.
-- `auth.md` handles FLOW-level concerns. Passkey ceremonies, OAuth redirect state, session refresh, recovery codes, CAPTCHA escalation, cross-tab sync, embedded sign-in under Storage Access API. These rules churn with the web platform.
-
-Treat them as a pair. If you change the label markup, you edit `forms.md`. If you change what happens after submit, you edit this file.
+Framework-agnostic patterns for authentication FLOWS: redirects, sessions, recovery, second factors, embedded sign-in. Input-level concerns (label, `autocomplete`, `aria-invalid`, error placement, multi-error focus return, password-manager detection) live in `forms.md`. These two age at different speeds: edit `forms.md` for label markup, edit this file for what happens after submit. Cross-link, do not duplicate.
 
 ## Passkeys and WebAuthn
 
-Passkeys are the modern default for new sign-in flows. They eliminate the phishing surface that passwords and SMS codes share, and they remove the password reset funnel entirely for users who enrol.
+Passkeys are the modern default for new sign-in flows: no phishing surface, no password-reset funnel for enrolled users.
 
-### Offer passkeys inline, not as a separate flow
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Offer passkeys inline via conditional UI above the username field, not as a sibling "Sign in with passkey" button next to "Sign in with password" | With a registered passkey present, the password-manager popup offers the passkey at the username field, not after submit |
+| `autocomplete="username webauthn"` on the username input | The `webauthn` token is the signal; without it the browser will not offer the passkey at this field |
+| `mediation: 'conditional'` makes `navigator.credentials.get` non-modal (surfaced via autofill popup) | A normal `get` without conditional mediation pops a modal, the wrong sign-in UX |
+| Trigger `navigator.credentials.create` only after the user is authenticated by another method, from a deliberate "Set up a passkey" affordance in account settings | Never silently on first sign-in |
+| After a password sign-in, show a one-time inline prompt (not a modal) to enrol a passkey | Dismissing is one click; accepting triggers `create` |
+| Support floor: `navigator.credentials.get` with `mediation: 'conditional'` runs in current Chromium, Safari 16+, Firefox 122+ | Feature-detect via `isConditionalMediationAvailable` and fall back to the password field without layout shift |
 
-The classic mistake: a "Sign in with passkey" button next to "Sign in with password", as if they were peer choices. This buries the modern option. The correct UX is conditional UI: the username field itself offers the passkey when the browser holds one for this origin.
-
-Principle: surface the passkey above the username field as an inline suggestion, not as a sibling flow.
-
-Check: open the sign-in page with a registered passkey present. The password manager popup offers the passkey at the username field, not after submit.
-
-### Conditional UI markup
+Conditional UI sign-in form markup:
 
 ```html
 <form id="signin">
@@ -57,9 +49,7 @@ Check: open the sign-in page with a registered passkey present. The password man
 </form>
 ```
 
-The `webauthn` token in `autocomplete` is the signal. Without it, the browser will not offer the passkey at this field.
-
-### The conditional get call
+The conditional `get` call:
 
 ```js
 async function startConditionalPasskey() {
@@ -88,31 +78,20 @@ async function startConditionalPasskey() {
 document.addEventListener('DOMContentLoaded', startConditionalPasskey);
 ```
 
-The `mediation: 'conditional'` flag is what makes the call non-modal. It waits in the background; the browser surfaces it through the autofill popup. A normal `navigator.credentials.get` call without conditional mediation pops a modal, which is the wrong UX for sign-in.
-
-### Registration (creating a passkey)
-
-`navigator.credentials.create` runs after the user is already authenticated by another method (password, magic link, or social). Trigger it from a deliberate "Set up a passkey" affordance in account settings, never silently on first sign-in.
-
-Check: a new user signs in with a password, lands in the app, and sees a one-time inline prompt (not a modal) offering to enrol a passkey. Dismissing it is one click. Accepting it triggers `create`.
-
-### Passkey support floor
-
-`navigator.credentials.get` with `mediation: 'conditional'` is supported in current Chromium, Safari 16+, and Firefox 122+. Feature-detect (`isConditionalMediationAvailable`) and fall back to the password field on older browsers without a layout shift.
-
 ## OAuth Redirect UX
 
-OAuth at the frontend level is three pages: your sign-in page, the provider's consent screen, and your callback page. The flow-level rules govern what happens between them.
+Three pages: your sign-in page, the provider's consent screen, your callback page. Flow rules govern what happens between them.
 
-### Authorization Code with PKCE only
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Authorization Code with PKCE only | Implicit flow and password grant are deprecated |
+| PKCE on the wire | Redirect URL contains `code_challenge` and `code_challenge_method=S256`; callback exchange POST includes `code_verifier`; no `response_type=token` anywhere |
+| `state` is required, cryptographically random per redirect | Store in `sessionStorage` (not `localStorage`), verify on callback, cancel with an error on mismatch |
+| One callback path per provider, registered exactly | No wildcards |
+| Callback is a plain page in the trust boundary of your auth | No third-party scripts, no analytics, no advertising tags |
+| Callback exchanges the code, clears `state` and verifier from `sessionStorage`, redirects onward | Callback URL is on the allow-list, returns only first-party assets, fires analytics only after the session is established |
 
-Implicit flow and password grant are deprecated. The modern frontend flow is Authorization Code with PKCE. The frontend generates a code verifier, derives a code challenge, sends the challenge to the provider, and exchanges the returned code (plus the verifier) for tokens at the token endpoint.
-
-Check: the redirect URL contains `code_challenge` and `code_challenge_method=S256`. The callback exchange POST includes `code_verifier`. No `response_type=token` anywhere.
-
-### The state parameter is required, not optional
-
-Generate a cryptographically random `state` per redirect, store it in `sessionStorage` (not `localStorage`), and verify it on callback. Mismatched state means cancel the flow and surface an error.
+The PKCE redirect:
 
 ```js
 function startOAuth(provider) {
@@ -129,68 +108,52 @@ function startOAuth(provider) {
 }
 ```
 
-### Redirect URI rules
+Provider error states (returned on the callback query string). Each renders a distinct, plain-language message; none surface raw provider strings.
 
-- One callback path per provider, registered exactly with the provider. No wildcards.
-- The callback is a plain page with no third-party scripts, no analytics, and no advertising tags. It runs in the trust boundary of your auth.
-- The callback page exchanges the code, clears the state and verifier from `sessionStorage`, and redirects onward.
-
-Check: the OAuth callback URL is on the allow-list, returns only first-party assets, and does not fire analytics until after the session is established.
-
-### Error states surfaced from the provider
-
-The provider returns errors on the callback query string. Handle the canonical set explicitly.
-
-| `error` value | User-facing message |
-|---|---|
+| `error` value | Frontend response |
+| --- | --- |
 | `access_denied` | "Sign-in cancelled. Try again or use another method." |
-| `consent_required` | Redirect back to the authorize endpoint with `prompt=consent`. |
-| `login_required` | Redirect back to the authorize endpoint with `prompt=login`. |
-| `invalid_scope` | Engineering bug; log and show a generic error. |
+| `consent_required` | Redirect back to authorize with `prompt=consent` |
+| `login_required` | Redirect back to authorize with `prompt=login` |
+| `invalid_scope` | Engineering bug: log and show a generic error |
 | `server_error`, `temporarily_unavailable` | "Provider is having issues. Try again in a minute." |
 
-Check: each of the five errors above renders a distinct, plain-language message. None of them surface raw provider strings.
+Token storage:
 
-### Token storage rules
-
-- Never store access tokens or refresh tokens in `localStorage`. Cross-site scripting reads everything in `localStorage`.
-- Store the session in an `httpOnly`, `Secure`, `SameSite=Lax` (or `Strict` where the flow allows) cookie set by your backend.
-- If the frontend must hold a token for an API call (rare), keep it in memory in a closure for the page session only. Drop it on reload.
-
-Check: open DevTools Application tab after sign-in. `localStorage` and `sessionStorage` contain no token, no JWT, no refresh token. The session cookie is `httpOnly` and the `Secure` flag is set.
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Never store access tokens or refresh tokens in `localStorage` | Cross-site scripting reads everything in `localStorage` |
+| Session lives in a backend-set `httpOnly`, `Secure`, `SameSite=Lax` cookie (or `Strict` where the flow allows) | See `security.md` for cookie hardening |
+| If the frontend must hold a token, keep it in memory in a closure for the page session only | Drop it on reload |
+| Verify in DevTools Application tab after sign-in | `localStorage` and `sessionStorage` hold no token/JWT/refresh token; session cookie is `httpOnly` with `Secure` set |
 
 ## Magic Link UX
 
-Magic links remove the password from the sign-in surface entirely. They are useful for low-friction sign-up and infrequent sign-in, and they are a clean fallback when the user lost a passkey.
+Magic links remove the password from the sign-in surface: low-friction sign-up, infrequent sign-in, clean fallback when a passkey is lost.
 
-### Expiry and single-use
-
-- Magic link expires under 15 minutes from issuance. Longer is a credential.
-- Single use; the link invalidates on first successful exchange and on a second attempt.
-- The link redeems a short-lived session token; it does not itself become the session.
-
-Check: copy the magic link, redeem it, then attempt the same link a second time. Second attempt rejects with a clear "Link already used" message and offers to send a new one.
-
-### Second-device friendly handoff
-
-Most users open email on phone, then want to sign in on desktop. The link MUST handle the cross-device case.
-
-- The magic-link landing page presents two affordances. "Continue on this device" (the default) and "Use on another device" (the handoff).
-- The handoff shows a short numeric code (six or eight digits) and a QR code. The waiting tab on the original device polls a short endpoint and unlocks when the code is consumed.
-
-Check: open the magic-link email on a phone, choose "Use on another device", type the code on a desktop tab that was waiting. Both flows complete without re-entering the email.
-
-### The "open on different device" trap
-
-If the user clicks the link on a device they did not initiate the sign-in from, the session must NOT silently sign them in on that new device. The link redeems a session on the device that initiated, not on the device that clicked. The cross-device flow above is the explicit consent path.
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Magic link expires under 15 minutes from issuance | Longer is a credential |
+| Single use | Invalidates on first successful exchange and on a second attempt |
+| Link redeems a short-lived session token | It does not itself become the session |
+| Second redemption rejects clearly | "Link already used" message that offers to send a new one |
+| Landing page presents two affordances | "Continue on this device" (default) and "Use on another device" (handoff) |
+| Handoff shows a six- or eight-digit numeric code and a QR code | Waiting tab on the original device polls a short endpoint and unlocks when the code is consumed |
+| Link redeems a session on the device that initiated, not the device that clicked | Must not silently sign in on a new device; the cross-device flow is the explicit consent path |
 
 ## Session Expiry Handling
 
-Frontends fail at session expiry more often than at sign-in. The user sits in a tab for an hour, returns, clicks a button, and gets a silent 401 or a redirect loop.
+Frontends fail at expiry more than at sign-in: an idle tab clicks, gets a silent 401 or a redirect loop.
 
-### 401 interception pattern
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Single fetch interceptor: on 401, attempt one refresh, then retry the original request or escalate to sign-in | Throttle network to Offline, request, return online, retry: no redirect loop, no two stacked refresh calls |
+| Refresh token rotates on every use; reuse revokes the family as a stolen-credential signal | Backend behavior; frontend keeps rotation atomic |
+| Single-flight refresh via an in-flight guard reset in `finally` | Ten concurrent requests against an expired session result in exactly one `/auth/refresh` call while the other nine wait |
+| Soft expiry: client-side inactivity timer triggers at 75 percent of the session window | Non-blocking banner "You have been idle. Sign back in to continue." offering one-click re-auth in place (passkey conditional UI in the modal) without losing form input |
+| Hard expiry: server returns 401, full redirect to sign-in with a `next` param back to the original page | Both soft and hard must exist; hard-only causes lost-draft complaints |
 
-Wrap your fetch layer in a single interceptor. On 401, attempt one refresh, then either retry the original request or escalate to the sign-in screen.
+401 interception:
 
 ```js
 async function fetchWithAuth(input, init = {}) {
@@ -204,21 +167,9 @@ async function fetchWithAuth(input, init = {}) {
   }
   return fetch(input, { ...init, credentials: 'include' });
 }
-
-async function refreshSession() {
-  const res = await fetch('/auth/refresh', {
-    method: 'POST',
-    credentials: 'include',
-  });
-  return res.ok;
-}
 ```
 
-Check: throttle the network in DevTools to "Offline", make a request, return online, retry. The flow does not produce a redirect loop or stack two refresh calls.
-
-### Refresh-token rotation
-
-The refresh token issued by your backend should rotate on every use. Reuse of an old refresh token signals a stolen credential; the backend revokes the family. The frontend's job is to keep the rotation atomic: one refresh in flight at a time.
+Single-flight refresh:
 
 ```js
 let refreshInFlight = null;
@@ -233,141 +184,61 @@ function refreshSession() {
 }
 ```
 
-Check: trigger ten concurrent requests against an expired session. Exactly one `/auth/refresh` call goes out, the other nine wait.
-
-### Idle notification (soft expiry)
-
-For sensitive apps, surface a soft-expiry warning before hard expiry kicks in. A small banner: "You have been idle. Sign back in to continue." The banner offers a one-click re-auth without losing the current page state.
-
-- Soft expiry: client-side timer counts user inactivity. Trigger at 75 percent of the session window.
-- Hard expiry: server returns 401. The interceptor handles it as above.
-
-Check: leave a tab idle past the soft threshold. A non-blocking banner appears. Clicking it re-auths in place (passkey conditional UI surfaces in the modal) without losing form input.
-
-### Soft expiry vs hard expiry
-
-- Soft expiry: user gets a warning, can re-auth in place, no work lost.
-- Hard expiry: session is gone, full redirect to sign-in with a `next` param that returns to the original page.
-
-Both must exist. Hard-only is the source of the "I lost my draft" complaint.
-
 ## Account Recovery Beyond Password Reset
 
-Password reset is the easy case. The hard cases: lost passkey, lost second factor, lost email access, lost phone.
+Password reset is the easy case. The hard cases: lost passkey, lost second factor, lost email, lost phone.
 
-### Recovery codes
-
-At enrolment for any second factor, issue ten one-time recovery codes. The user copies them, prints them, or saves them to a password manager. Each code is single-use and replaces the second factor for one sign-in.
-
-Check: a user enrols a passkey or TOTP and immediately sees ten codes, a one-click "Copy all" affordance, a "Print" affordance, and a "Save as .txt" affordance. The flow blocks until the user confirms ("I have saved my codes").
-
-### Trusted-device prompt
-
-For sign-in from a familiar device, offer "Trust this device for 30 days". The trust survives in a long-lived first-party cookie. From a trusted device, the second factor is skipped; from any other device, it is required.
-
-Check: sign in from device A with "Trust this device" checked. Sign in from device B and the second factor prompts. Sign in from device A again within 30 days, no second factor.
-
-### Identity verification flow
-
-When all factors are lost, the user enters a manual verification flow. The frontend's job is to make this a calm, clear path, not a wall.
-
-- One step at a time: email confirmation, identity document (where the product warrants it), human review window stated up front ("Most reviews complete in 24 hours").
-- A single, visible status page the user can return to ("Your recovery request is in review since Monday at 2:14 PM").
-- A defined SLA in the UI, not in the help center.
-
-Check: a user with no remaining factors lands on a recovery flow that tells them, within one screen, what they need and how long it will take. No buried links.
-
-### Lost second factor specifically
-
-The most common recovery: I have my password, I lost my phone with the TOTP app or the passkey.
-
-- Offer recovery codes first.
-- If recovery codes are also gone, escalate to email verification PLUS a holding period (24 to 72 hours) before the second factor is reset. The holding period is the protection against an attacker who already has the password.
-
-Check: simulate "lost phone, no recovery codes". The UI explains the holding period, sends a confirmation email, and tells the user exactly when the reset will complete.
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| At second-factor enrolment, issue ten one-time recovery codes, each single-use, each replacing the second factor for one sign-in | Enrolment shows ten codes with "Copy all", "Print", "Save as .txt" affordances; the flow blocks until the user confirms "I have saved my codes" |
+| "Trust this device for 30 days" survives in a long-lived first-party cookie; trusted device skips the second factor, any other device requires it | Device A trusted within 30 days needs no second factor; device B prompts |
+| All factors lost: one-step-at-a-time identity verification (email confirmation, identity document where warranted), human review window stated up front ("Most reviews complete in 24 hours") | A user with no remaining factors learns within one screen what they need and how long it takes, with no buried links |
+| Single visible status page the user can return to ("Your recovery request is in review since Monday at 2:14 PM") | SLA shown in the UI, not the help center |
+| Lost second factor: offer recovery codes first | |
+| Recovery codes also gone: email verification plus a 24-to-72-hour holding period before reset | For "lost phone, no recovery codes" the UI explains the holding period, sends a confirmation email, and states exactly when the reset completes |
 
 ## CAPTCHA Placement and Accessibility
 
-CAPTCHA exists to stop automated abuse, not to harass legitimate users. The default posture is invisible challenge first, visible challenge only on suspicion.
+CAPTCHA stops automated abuse, not legitimate users. Default posture: invisible challenge first, visible challenge only on suspicion.
 
-### Never on the first interaction
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Invisible first, visible only on suspicion (failed attempts from an IP, known-bad fingerprint, anomalous device) | A fresh sign-in page renders without a CAPTCHA; it appears only after a failed attempt or a server-flagged risk score |
+| When shown, CAPTCHA goes before the submit button in focus order | Tab order is username, password, CAPTCHA, submit, with no backward jumps or focus traps |
+| Surface invisible-CAPTCHA failure as the same inline error pattern any other validation uses (see `forms.md`) | Blocked third-party domain produces an inline error within two seconds, not a stuck spinner |
+| Prefer providers (Turnstile, hCaptcha) that run zero-interaction for trusted browsers via Privacy Pass / Private Access Tokens | In a clean profile the CAPTCHA resolves with no visible puzzle for 95 percent of attempts; the 5 percent that escalate present an accessible audio fallback and a visible refresh affordance |
 
-A user landing on the sign-in page should see the username field, not a CAPTCHA widget. Add the challenge only when behaviour signals risk: failed attempts from this IP, known-bad fingerprint, anomalous device.
-
-Check: a fresh sign-in page renders without a CAPTCHA. The CAPTCHA appears only after a failed attempt or a server-flagged risk score.
-
-### Placement in the focus order
-
-When the CAPTCHA does appear, it goes BEFORE the submit button in the focus order. Tab from the password field, the CAPTCHA receives focus, Tab again, the submit button receives focus.
-
-Check: keyboard-only sign-in. Tab order is username, password, CAPTCHA, submit. No focus jumps backward, no focus traps.
-
-### Invisible-CAPTCHA UX trap
-
-Invisible CAPTCHAs (Turnstile, hCaptcha invisible, reCAPTCHA v3) run on submit. The trap: the submit button reports loading, the CAPTCHA fails silently, and the form sits with no error.
-
-Surface the failure explicitly. The interceptor must convert a CAPTCHA failure into the same inline error pattern any other validation uses (see `forms.md`).
-
-Check: force a CAPTCHA failure (block the third-party domain in DevTools). The submit attempt produces an inline error within two seconds, not a stuck spinner.
-
-### Provider choice and the Privacy Pass preview
-
-Cloudflare Turnstile, hCaptcha, and reCAPTCHA all expose accessible widgets, but the accessibility floor varies. Turnstile and hCaptcha lead on the no-puzzle path for trusted browsers (Privacy Pass, Private Access Tokens). Prefer the providers that can run zero-interaction for the common case.
-
-Check: in a clean browser profile, the CAPTCHA resolves without a visible puzzle for 95 percent of attempts. The 5 percent that escalate present an accessible audio fallback and a visible refresh affordance.
-
-### Accessibility floor for the widget
+Accessibility floor for the widget:
 
 - Visible focus ring on the widget container.
 - Keyboard-operable challenge (Space, Enter, arrow keys).
 - Audio fallback for visual puzzles.
-- `aria-describedby` on the submit button pointing at the CAPTCHA status text when a challenge is in progress.
-
-Check: navigate the CAPTCHA with the keyboard only, then with VoiceOver / NVDA only. Both can complete the flow.
+- `aria-describedby` on the submit button pointing at the CAPTCHA status text while a challenge is in progress.
+- Both keyboard-only and screen-reader-only (VoiceOver / NVDA) users can complete the flow (see `accessibility.md`).
 
 ## Sign-In Form Structure
 
-The sign-in form is the highest-converting form in most products. The structure rules below are non-negotiable.
+The highest-converting form in most products. Non-negotiable structure.
 
-### Single submit, autofocus the first field
-
-- One `<form>` element. One submit button.
-- `autofocus` on the username field for the sign-in route (not on other routes).
-- No off-form floating fields. Password managers will not detect them.
-
-Check: open the sign-in page. Cursor is in the username field. Pressing Enter from either field submits the form.
-
-### No Tab traps
-
-The form contains exactly the fields plus the submit and recovery links. Social sign-in options sit ABOVE the form so they are first in the tab order; recovery links sit BELOW so they are last.
-
-Check: Tab from page load. Order is "Skip to content", social options, username, password, submit, "Forgot password", "Create account". No order surprises.
-
-### Error summary at the top after submit
-
-On a multi-error submit, render a summary at the top of the form, focus the summary, and link each item to its field. The pattern is documented in `forms.md`. The flow-level rule is: the summary appears AND the first invalid field is also focusable from the summary link.
-
-Check: submit with three invalid fields. Focus moves to the summary; pressing Enter on the first summary link moves focus to the first invalid field.
-
-### Focus the first invalid field on single-error submit
-
-When only one field is invalid, skip the summary and move focus directly to the invalid field. The inline error renders below the field as specified in `forms.md`.
-
-Check: submit with only the email invalid. Focus is on the email field, the inline error is visible, no summary appears.
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| One `<form>`, one submit button, `autofocus` on the username field for the sign-in route only, no off-form floating fields | Cursor lands in the username field; pressing Enter from either field submits |
+| Social sign-in above the form (first in tab order), recovery links below (last); the form holds only fields plus submit and recovery links | Tab order from page load: "Skip to content", social options, username, password, submit, "Forgot password", "Create account", with no surprises |
+| Multi-error submit: error summary at the top of the form, focused, each item linked to its field (pattern in `forms.md`) | Pressing Enter on the first summary link moves focus to the first invalid field |
+| Single-error submit: skip the summary, move focus directly to the invalid field | Inline error renders below the field |
 
 ## Sign-Up Progressive Disclosure
 
-The wall-of-fields sign-up form is dead. Modern sign-up reveals one or two fields at a time and only asks for what the next step needs.
+The wall-of-fields form is dead. Reveal one or two fields at a time and ask only for the next step.
 
-### Email first, then password
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Step 1 collects only email with a "Continue" button; server returns new vs existing; form transitions to step 2 (password) in place, no route change | Entering a new email and clicking Continue reveals a password field with a strength meter without navigation; the browser back button returns to the email step |
+| Terms-of-service consent is a required single checkbox directly above submit, agreement text visible; avoid "by clicking submit you agree" | Submitting without the checkbox shows an inline error pointing at the checkbox, not a generic "agree to terms" error |
+| Strength meter maps to actual requirements (length, character classes, common-password check); no moving emoji, animated fire icons, or congratulatory copy | Three to five bars across, monochrome with a single accent color, status text underneath ("Strong enough", "Add a longer word", "Avoid common passwords") |
+| Strength check runs client-side against a small bloom filter of common passwords AND server-side on submit | Typing "password123" makes the meter immediately flag it as common, with no animation |
 
-Step 1 collects email and only email. The submit button reads "Continue". The server returns whether this email is new (sign-up) or existing (sign-in fallback) and the form transitions to step 2 in place, without a route change.
-
-Check: enter a new email, click Continue. The same page transitions to a password field with a strength meter, no navigation. The browser back button returns to the email step.
-
-### Terms of service consent
-
-Required, single checkbox, placed directly above the submit button with the agreement text visible. Avoid the "by clicking submit you agree" pattern; it fails consent law in several jurisdictions and is bad UX.
+Terms consent markup:
 
 ```html
 <label>
@@ -377,23 +248,17 @@ Required, single checkbox, placed directly above the submit button with the agre
 <button type="submit">Create account</button>
 ```
 
-Check: submitting without the checkbox shows an inline error pointing at the checkbox, not a generic "agree to terms" error.
-
-### Strength meter without theatre
-
-Show a strength bar that maps to the actual requirements (length, character classes, common-password check). Do NOT use moving emoji, animated fire icons, or congratulatory copy.
-
-- Three to five bars across, monochrome with a single accent color.
-- Status text underneath ("Strong enough", "Add a longer word", "Avoid common passwords").
-- Strength check runs client-side against a small bloom filter of common passwords AND server-side on submit.
-
-Check: type a known weak password ("password123"). The meter immediately calls it out as common. No animation.
-
 ## Cross-Device and Cross-Tab Session Sync
 
-Users open three tabs of your app. They sign in on one. The other two need to know.
+Users open three tabs and sign in on one. The others need to know.
 
-### BroadcastChannel API
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| `BroadcastChannel('auth')` posts `signed-in` and `signed-out` so other tabs reload or redirect | Signing in on tab A reloads tab B to signed-in within a second; signing out on tab A redirects tab B to sign-in |
+| Routes with in-progress state: non-disruptive banner "You signed in on another tab. Refresh to continue." instead of auto-reload | The draft survives the reload via the draft-recovery pattern (see `forms.md`) |
+| Fall back to the `storage` event on the sentinel key `auth.signal` where `BroadcastChannel` is unavailable (some WebViews) | The storage-event path produces the same cross-tab behavior |
+
+BroadcastChannel signal:
 
 ```js
 const auth = new BroadcastChannel('auth');
@@ -415,17 +280,7 @@ auth.onmessage = (event) => {
 };
 ```
 
-Check: sign in on tab A. Tab B reloads within a second and shows the signed-in state. Sign out on tab A. Tab B redirects to sign-in.
-
-### "You signed in on another tab" reload
-
-For routes where state matters (a form in progress, a draft), prefer a non-disruptive banner: "You signed in on another tab. Refresh to continue." The user clicks once; the draft is preserved through the reload by the same draft-recovery pattern used elsewhere (see `forms.md`).
-
-Check: sign in on tab A while tab B has a form with unsaved input. Tab B shows the banner, not an automatic reload. Clicking refresh preserves the input.
-
-### Storage events as the fallback
-
-`BroadcastChannel` is not available in all WebView contexts. Fall back to the `storage` event on a sentinel key.
+Storage-event fallback:
 
 ```js
 window.addEventListener('storage', (e) => {
@@ -440,19 +295,18 @@ function signalSignedOut() {
 }
 ```
 
-Check: in a WebView without `BroadcastChannel`, the storage-event path produces the same cross-tab behavior.
-
 ## Storage Access API for Embedded Sign-In
 
-Third-party cookies are deprecated. Embedded sign-in widgets (your own auth running in an iframe on a partner site) must request storage access on a user gesture.
+Third-party cookies are deprecated. An embedded sign-in widget (your auth in an iframe on a partner site) must request storage access on a user gesture.
 
-### The ceremony
+| Principle | Check (with threshold/value) |
+| --- | --- |
+| Ceremony: render a "Sign in" click target; on click call `document.requestStorageAccess()` before running the sign-in flow so the iframe gets first-party storage on grant | The button is visible immediately on load; `requestStorageAccess` is not in the network or call stack until the user clicks |
+| Never call `requestStorageAccess` outside a click handler | The browser denies it without a user gesture; render the button first, put the call inside the click handler |
+| Long-lived embedded sessions without top-level access use partitioned cookies (CHIPS) carrying `Partitioned`, scoped per top-level site, surviving reloads on the same host without third-party scope | In DevTools the session cookie shows `Partitioned: true` and a `Partition Key` matching the host site |
+| Denied storage access: open sign-in in a new top-level window with `window.open`, complete the flow, post the result back via `postMessage` (see `embed-patterns.md`) | The widget transitions to a "Sign in in a new window" affordance whose pop-out, on close, returns the embed to signed-in |
 
-1. The embedded widget renders a click target ("Sign in").
-2. The user clicks.
-3. On click, the widget calls `document.requestStorageAccess()`.
-4. The browser may prompt; on grant, the iframe gets first-party storage for this origin.
-5. The widget runs the sign-in flow.
+Request-storage-access ceremony:
 
 ```js
 button.addEventListener('click', async () => {
@@ -467,45 +321,25 @@ button.addEventListener('click', async () => {
 });
 ```
 
-### Never call requestStorageAccess without a user gesture
-
-The browser denies the call outside a click handler. The widget must render the button first; the call goes inside the click handler.
-
-Check: load the embedded widget. The button is visible immediately. `requestStorageAccess` is not in the network or call stack until the user clicks.
-
-### CHIPS for partitioned cookies
-
-Where the widget needs a long-lived session but the host does not warrant top-level access, use partitioned cookies (CHIPS). The cookie carries `Partitioned`, lives per top-level site, and survives across reloads on the same host without third-party scope.
-
-Check: in DevTools, the widget's session cookie shows `Partitioned: true` and a `Partition Key` matching the host site.
-
-### Fallback: pop the auth out of the iframe
-
-If storage access is denied, open the sign-in in a new top-level window with `window.open`, complete the flow there, and post the result back to the embed via `postMessage` (see `embed-patterns.md`).
-
-Check: deny storage access. The widget transitions to a "Sign in in a new window" affordance. Clicking opens a top-level window; closing it returns the embed to a signed-in state.
-
 ## Anti-Patterns
 
-- Storing access tokens or refresh tokens in `localStorage`. Cross-site scripting reads them.
-- Implicit-flow OAuth. The token leaks in the URL fragment.
-- A "Sign in with passkey" button as a sibling to "Sign in with password". Bury the password; surface the passkey inline.
-- Magic links that expire after 24 hours. That is a credential.
-- Silent redirect loops on 401. Always escalate to sign-in with a `next` param.
-- CAPTCHA on the first interaction. Add only on suspicion.
-- "By signing in you agree to terms". Make consent explicit and visible.
-- Strength meters that animate. Theatre wastes the user's time.
-- Cross-tab sign-in that auto-reloads a tab with unsaved input. Show a banner; let the user choose.
-- Embedded sign-in that calls `requestStorageAccess` on page load. The browser denies it; the UX dies.
+- Storing access tokens or refresh tokens in `localStorage`: cross-site scripting reads them.
+- Implicit-flow OAuth: the token leaks in the URL fragment.
+- A "Sign in with passkey" button as a sibling to "Sign in with password": bury the password, surface the passkey inline.
+- Magic links that expire after 24 hours: that is a credential.
+- Silent redirect loops on 401: always escalate to sign-in with a `next` param.
+- CAPTCHA on the first interaction: add only on suspicion.
+- "By signing in you agree to terms": make consent explicit and visible.
+- Strength meters that animate: theatre that wastes the user's time.
+- Cross-tab sign-in that auto-reloads a tab with unsaved input: show a banner, let the user choose.
+- Embedded sign-in that calls `requestStorageAccess` on page load: the browser denies it and the UX dies.
 
-## Self-Healing for Authentication
-
-Before declaring an auth flow complete:
+## Self-Healing Checklist
 
 - [ ] Passkey conditional UI offered above the username field, not as a separate flow
 - [ ] `autocomplete="username webauthn"` on the username input
 - [ ] OAuth uses Authorization Code with PKCE; no implicit flow anywhere
-- [ ] OAuth `state` and `code_verifier` stored in `sessionStorage`, cleared on callback
+- [ ] OAuth `state` and `code_verifier` in `sessionStorage`, cleared on callback
 - [ ] Tokens never in `localStorage`; session in `httpOnly`, `Secure` cookies
 - [ ] Magic link expires under 15 minutes and is single-use
 - [ ] Magic link supports cross-device handoff (numeric code or QR)
@@ -513,21 +347,21 @@ Before declaring an auth flow complete:
 - [ ] Soft-expiry banner before hard expiry, no lost work
 - [ ] Recovery codes issued at second-factor enrolment, ten codes, copy / print / save affordances
 - [ ] Trusted-device option present and respected
-- [ ] Lost-second-factor path includes a documented holding period
-- [ ] CAPTCHA is invisible by default; visible only on suspicion; appears BEFORE submit in tab order
+- [ ] Lost-second-factor path includes a documented holding period (24 to 72 hours)
+- [ ] CAPTCHA invisible by default, visible only on suspicion, before submit in tab order
 - [ ] CAPTCHA failure surfaces as an inline error within two seconds
-- [ ] Sign-in form has a single submit, autofocus on the first field, no Tab traps
-- [ ] Multi-error submit shows summary at top, focuses first invalid field via summary link
+- [ ] Sign-in form: single submit, autofocus the first field, no Tab traps
+- [ ] Multi-error submit shows a top summary, focuses the first invalid field via summary link
 - [ ] Sign-up progressively discloses (email, then password); browser back works
-- [ ] Terms of service consent is an explicit checkbox above submit
+- [ ] Terms consent is an explicit checkbox above submit
 - [ ] Password strength meter is functional, not theatrical
 - [ ] `BroadcastChannel` cross-tab signal in place, with `storage` event fallback
 - [ ] Storage Access API requested only inside a user click handler
-- [ ] CHIPS partitioned cookies in use for embedded session, or pop-out fallback if denied
+- [ ] CHIPS partitioned cookies for embedded session, or pop-out fallback if denied
 
-## See also
+## See Also
 
-- [forms.md](forms.md) for input-level concerns (label, validation, autofill, error placement)
-- [embed-patterns.md](embed-patterns.md) for postMessage handshake, viewport reporting, theme adoption
-- [security.md](security.md) for CSP, COOP, COEP, CORP, Trusted Types, Permissions-Policy
-- [accessibility.md](accessibility.md) for focus management, ARIA, live regions
+- [forms.md](forms.md): input-level concerns (label, validation, autofill, error placement, draft recovery)
+- [embed-patterns.md](embed-patterns.md): postMessage handshake, pop-out window, viewport reporting
+- [security.md](security.md): cookie hardening, CSP, COOP, COEP, CORP, Trusted Types, Permissions-Policy
+- [accessibility.md](accessibility.md): focus management, ARIA, live regions, screen-reader flows

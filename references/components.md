@@ -1,50 +1,47 @@
 ---
 title: Component Discipline
-purpose: Standardizing repeated widgets across pages, defining canonical component contracts, slot-based composition, and detecting drift before it ships.
+purpose: Standardize repeated widgets across pages behind one canonical contract, compose with slots over prop explosion, and detect drift programmatically before it ships.
 load-when:
   task-keywords: [component, widget, contract, extraction, slots, composition, Storybook, tokens, design]
   symptoms: [duplicate id, score dropped, viewport overflow, dark mode broken]
 prereq: SKILL.md
 related: [audit-workflow.md, defects.md, design.md, ui-ux.md]
-size: ~330 lines
+size: ~283 lines
 ---
 
 # Component Discipline
 
-Framework-agnostic guidance on standardizing repeated widgets across pages, defining component contracts, and detecting drift before it ships. Polishing each instance separately is not enough: same-purpose widgets must follow one canonical visual and content contract.
+Polishing each instance separately is not enough: same-purpose widgets must follow one canonical visual and content contract. A repeated widget either has one source of truth or one documented, named variant. There is no third option.
 
 ## Terms
 
-The rest of this file (and [audit-workflow.md](audit-workflow.md) and [defects.md](defects.md)) uses these terms with the meanings below. Pin them down before reading further.
-
-- **Widget family**: a group of repeated UI elements that serve the same role across pages, e.g. all feature cards, all CTA bands, all hero variants. See the 11-family table below.
-- **Canonical contract**: the single, authoritative visual and content specification for a widget family. Names the required and optional content fields, the allowed variants, the CSS properties that are part of the family (padding, radius, shadow, etc.), and the states (hover, focus, active, disabled, loading). A component is not done until the contract is documented and every instance matches it.
-- **Named variant**: an intentional, documented variation of a component with a clear purpose, exposed through one prop, one class, or one data attribute (e.g., `card--feature`, `card--integration`, `card--pricing`). Variants are part of the contract; ad hoc class combinations are not variants, they are drift.
-- **Drift**: a repeated widget that looks or behaves differently across pages without a named variant. Drift indicates a missing component abstraction or an incomplete variant set. Detected by visual comparison and by the drift collector (below).
-- **Drift collector**: a browser-automation script that reads computed styles and bounding boxes for every member of a family across every audited route, then flags any difference not explained by a named variant.
+- Widget family: a group of repeated UI elements serving the same role across pages (all feature cards, all CTA bands, all hero variants). See the 11-family table.
+- Canonical contract: the single authoritative visual + content spec for a family. Names required/optional content fields, allowed variants, the family CSS properties (padding, radius, shadow), and states (hover, focus, active, disabled, loading). A component is not done until the contract is documented and every instance matches it.
+- Named variant: an intentional, documented variation exposed through one prop, one class, or one data attribute (`card--feature`, `card--integration`, `card--pricing`). Ad hoc class combinations are not variants, they are drift.
+- Drift: a repeated widget that looks or behaves differently across pages without a named variant. Signals a missing abstraction or incomplete variant set. Detected by visual comparison and the drift collector.
+- Drift collector: a browser-automation script that reads computed styles and bounding boxes for every family member across every audited route, then flags any difference not explained by a named variant.
 
 ## When to Extract
 
-Extraction turns repeated markup into a single source of truth. Extract when any of these hold:
+Extract repeated markup into a single source of truth when:
 
 - The same structure appears three or more times across routes.
 - The same structure appears twice with clear future reuse.
-- Duplicated markup is causing visible drift (different padding, radius, typography, or hover behavior on instances that should look identical).
+- Duplicated markup causes visible drift (different padding, radius, typography, or hover behavior on instances that should look identical).
 
 Do not extract when:
 
-- The local stack has no include or component mechanism and adding one would add build complexity out of proportion to the benefit. Normalize markup and class names instead.
-- The two instances look similar but serve genuinely different semantic purposes. Build them as named variants rather than forcing one component to flex.
+- The local stack has no include or component mechanism and adding one adds build complexity out of proportion to the benefit. Normalize markup and class names instead.
+- Two instances look similar but serve genuinely different semantic purposes. Build them as named variants, not one flexing component.
 
-The principle expressed as a check: a repeated widget either has one source of truth or has a documented, named variant. There is no third option.
+Sequencing rules:
 
-Extract data before markup. The first duplication to remove is shared DATA, not shared structure: a value used in two or more places (a domain or base URL, a price, a label, a disclaimer, a magic number, an enum) belongs in one module that every call site imports. Hardcoding the same string or number in several files is the most common and most damaging form of drift, because the copies diverge silently.
-
-Know when to STOP extracting. A duplicate that varies by exactly one value is a clean component with one prop. A near-duplicate that would need two or more shape or layout props to cover its variants is usually a premature abstraction: it pushes the styling burden back to the call site (the over-generic-component anti-pattern above) and is harder to read than the duplication it replaced. Extract data and structurally-identical blocks; leave contextually-distinct near-duplicates inline and note them.
+- Extract DATA before markup. The first duplication to remove is shared data, not structure: a value used in two or more places (domain/base URL, price, label, disclaimer, magic number, enum) belongs in one module every call site imports. Copied strings/numbers diverge silently.
+- Know when to STOP. A duplicate that varies by exactly one value is a clean component with one prop. A near-duplicate needing two or more shape/layout props is a premature abstraction (it pushes styling back to the call site, the over-generic anti-pattern); leave contextually-distinct near-duplicates inline and note them.
 
 ## The 11 Widget Families
 
-Every multi-page polish pass starts by inventorying these families. For each family the inventory must record: routes where it appears, source (template or component or duplicated markup), required and optional content fields, allowed variants, and the canonical visual contract (spacing, typography, border, radius, shadow, color, icon placement, image ratio, CTA behavior, focus ring, hover behavior, responsive behavior).
+Every multi-page polish pass starts by inventorying these families. The inventory is mandatory: without it, drift is invisible and standardization is guesswork (see [audit-workflow.md](audit-workflow.md) Phase 3). For each family the inventory records: routes where it appears, source (template/component/duplicated markup), required and optional content fields, allowed variants, and the canonical visual contract (spacing, typography, border, radius, shadow, color, icon placement, image ratio, CTA behavior, focus ring, hover behavior, responsive behavior).
 
 | Family | Members | Standardization criteria |
 |--------|---------|--------------------------|
@@ -58,65 +55,66 @@ Every multi-page polish pass starts by inventorying these families. For each fam
 | Interactive systems | Accordions, tabs, menus, dropdowns, drawers, modals, hover cards, forms | One open/close behavior, one focus management policy, one Esc/outside-click rule |
 | Empty states | Empty list, empty search, zero data | Same polish as marketing surfaces; specific message and primary action |
 | Legal pages | Terms, privacy, acceptable use, security | Shared layout shell; consistent typography and spacing |
-| 404 / error pages | 404, 5xx, offline | Branded, useful (search box, home link), not just an apology |
-
-The inventory is mandatory for any multi-page polish. Without it, drift is invisible and standardization is guesswork. See [audit-workflow.md](audit-workflow.md) Phase 3 for the procedure.
+| 404 / error pages | 404, 5xx, offline | Branded and useful (search box, home link), not just an apology |
 
 ## Component Contract Checklist
 
-A widget is ready for extraction when every item below is true. Before declaring a component done, walk this list.
+A widget is ready for extraction when every item is true:
 
-- [ ] Required content fields are documented by usage: title, body, eyebrow, image, CTA, secondary CTA, metadata, icon, badge.
-- [ ] Optional fields have graceful empty states and do not leave blank gaps.
-- [ ] Markup is semantic and stable. Headings use the right level; landmarks are correct; lists are real lists.
+- [ ] Required content fields documented by usage: title, body, eyebrow, image, CTA, secondary CTA, metadata, icon, badge.
+- [ ] Optional fields have graceful empty states and leave no blank gaps.
+- [ ] Markup is semantic and stable: headings use the right level, landmarks are correct, lists are real lists.
 - [ ] Layout is resilient to long text, very short text, and missing optional fields. Test the longest realistic title and the shortest.
 - [ ] Desktop and mobile behavior is defined explicitly, not by accident.
 - [ ] Hover, focus, active, disabled, and loading states are defined when relevant.
 - [ ] Accessible names come from visible content unless a different name is necessary; visible text and `aria-label` agree.
 - [ ] Images have consistent intrinsic dimensions, aspect ratio, loading strategy, and alt behavior.
-- [ ] No page-specific magic numbers exist inside the component unless exposed as a named variant.
+- [ ] No page-specific magic numbers inside the component unless exposed as a named variant.
 - [ ] The component owns its CSS. Page-local overrides on shared widgets are forbidden.
 - [ ] Variants are explicit (one prop, one class, one data attribute), not arbitrary class combinations.
-- [ ] No hardcoded DOM `id` inside the component. Any `id` (and any `aria-controls`, `aria-labelledby`, `for`, or `href="#..."` that targets one) is derived from a per-instance unique id (`useId()` or the framework equivalent) and child ids are namespaced under it. A component with a static id breaks the moment it renders twice on a page.
-
-A component shipped without these answers is half-built and will drift on the next page.
+- [ ] No hardcoded DOM `id` inside the component. Any `id` (and any `aria-controls`, `aria-labelledby`, `for`, or `href="#..."` that targets one) is derived from a per-instance unique id (`useId()` or the framework equivalent) and child ids are namespaced under it. A static id breaks the moment the component renders twice on a page.
 
 ## Server vs Client Boundary
 
-State the boundary at the top of the contract. A component that tries to be both fails both: it ships client JS for behaviour that only runs on the server, or it skips hydration for behaviour that only runs on the client. Reject the in-between.
+State the boundary at the top of the contract. A component that tries to be both fails both.
 
-- **Server boundary**: no event handlers, no client state, no browser-only APIs (`window`, `document`, `localStorage`, `IntersectionObserver`). Renders on the server (or at build time), ships zero client JS for itself. Pattern matches the modern server-component model: data fetch, layout, semantic markup, the page's static skeleton.
-- **Client boundary**: interactive, hydrated, owns its event handlers and its local state. Ships the JS needed to drive its behaviour. Pattern matches a client island: a modal, a popover, a tab strip, an autocomplete.
-- **Hybrid is a defect**: a "server" component that calls a hook, attaches a listener, or reads `window` will explode in a server runtime or skip hydration silently. A "client" component that does no interactive work pays for hydration without earning it.
+| Boundary | Contract |
+|----------|----------|
+| Server | No event handlers, no client state, no browser-only APIs (`window`, `document`, `localStorage`, `IntersectionObserver`). Renders on the server (or build time), ships zero client JS for itself: data fetch, layout, semantic markup, the static skeleton. |
+| Client | Interactive, hydrated, owns its event handlers and local state, ships the JS to drive its behaviour: a client island (modal, popover, tab strip, autocomplete). |
+| Hybrid | A defect. A "server" component that calls a hook, attaches a listener, or reads `window` explodes in a server runtime or skips hydration silently. A "client" component doing no interactive work pays for hydration without earning it. |
 
-Declare the boundary in the contract header (a JSDoc tag, a top-of-file comment, a directive the framework recognises). Lint or type-check rejects components that import a server-only module from a client boundary, or a browser-only API from a server boundary.
+- Declare the boundary in the contract header (a JSDoc tag, a top-of-file comment, or a framework-recognised directive).
+- Lint or type-check rejects components that import a server-only module from a client boundary, or a browser-only API from a server boundary.
 
 ## Extraction Sequence
 
-Follow this sequence. Skipping a step turns extraction into yet another duplicated markup variant.
+Follow in order; skipping a step turns extraction into another duplicated markup variant.
 
-1. Choose the canonical contract. Pick the best existing implementation, the reference target, and the product needs as inputs. The contract is one design, not a union of all current usages.
-2. Name the widget and its variants clearly. Names like `hero-asymmetric`, `section-heading`, `feature-card`, `integration-card`, `pricing-card`, `final-cta`, `alternating-row`, or `faq-list` make intent obvious. Avoid `card`, `section`, `block` (too generic).
-3. Move the repeated markup into the framework's native component or partial mechanism. Applies in any templating system that supports component reuse: server-side partials, single-file components, JSX components, or build-time includes. Pick the mechanism the project already uses.
-4. Pass content as explicit fields. Embedded page-specific text inside shared markup is the most common cause of "we have a component but it still drifts".
+1. Choose the canonical contract from the best existing implementation, the reference target, and product needs. It is one design, not a union of all current usages.
+2. Name the widget and variants clearly (`hero-asymmetric`, `section-heading`, `feature-card`, `integration-card`, `pricing-card`, `final-cta`, `alternating-row`, `faq-list`). Avoid generic names: `card`, `section`, `block`.
+3. Move repeated markup into the framework's native component or partial mechanism (server-side partials, single-file components, JSX components, or build-time includes). Use the mechanism the project already uses.
+4. Pass content as explicit fields. Embedded page-specific text inside shared markup is the most common cause of a component that still drifts.
 5. Make variants explicit through one prop, one class, or one data attribute. If a variant needs three coordinated changes, encode them in one named variant, not three knobs.
-6. Centralize the CSS for the family and remove or reduce page-local overrides. The component owns its visual contract; page CSS adjusts only what the component exposes.
+6. Centralize the CSS for the family and remove/reduce page-local overrides. Page CSS adjusts only what the component exposes.
 7. Re-render every route that uses the widget. A single broken instance proves the component is incomplete.
-8. Compare every instance side-by-side at both audit viewports. If two instances do not look like members of the same system, the contract is wrong or the variant set is incomplete.
+8. Compare every instance side-by-side at both audit viewports. If two instances do not look like members of the same system, the contract or variant set is wrong.
 
 ## Versioning and Breaking Changes
 
-The canonical contract is an API. Treat it like one. The component family carries a semver, the consumers know which version they are on, and breaking changes ship with a migration path.
+The canonical contract is an API; carry a semver, tell consumers their version, ship breaking changes with a migration path.
 
-- **Patch (`x.y.Z`)**: bug fix that does not change the contract. A focus ring that was 2 px is now 3 px to pass contrast; a margin that was 16 px is now 24 px to match the token. Consumers pick up the fix on the next install with no code change.
-- **Minor (`x.Y.0`)**: backward-compatible addition. A new optional prop, a new named variant, a new slot, an additional state. Existing call sites keep working unchanged.
-- **Major (`X.0.0`)**: removed prop, removed variant, renamed slot, changed default behaviour, changed required-vs-optional, changed semantic markup in a way that affects accessibility wiring. Existing call sites need an update.
+| Bump | Meaning |
+|------|---------|
+| Patch (`x.y.Z`) | Bug fix that does not change the contract (focus ring 2px to 3px for contrast; margin 16px to 24px to match the token). Consumers pick up the fix on next install, no code change. |
+| Minor (`x.Y.0`) | Backward-compatible addition: a new optional prop, new named variant, new slot, additional state. Existing call sites keep working unchanged. |
+| Major (`X.0.0`) | Removed prop, removed variant, renamed slot, changed default behaviour, changed required-vs-optional, or changed semantic markup affecting accessibility wiring. Existing call sites need an update. |
 
 Deprecation discipline for any planned removal:
 
 - Mark the prop, variant, or slot with `@deprecated` JSDoc and a short reason. Type checkers and editors surface the warning at every call site.
-- Emit a one-line `console.warn` in development builds (gated by `process.env.NODE_ENV !== "production"` or the framework equivalent). Production stays silent. The warning names the deprecated thing and points at the migration.
-- Link the migration codemod from the deprecation message, not from a separate changelog entry. The deprecation goes:
+- Emit a one-line `console.warn` in development builds gated by `process.env.NODE_ENV !== "production"` (or the framework equivalent). Production stays silent; the warning names the deprecated thing and points at the migration.
+- Link the migration codemod from the deprecation message itself, not from a separate changelog entry:
 
 ```text
 [component] prop `size="huge"` is deprecated; use the `<header slot>` instead. Run `npx your-codemod component-size-huge` to migrate. Removed in v3.0.0.
@@ -126,31 +124,27 @@ Deprecation discipline for any planned removal:
 
 ## What To Avoid
 
-These four anti-patterns produce most cross-page drift.
+These four anti-patterns produce most cross-page drift:
 
-- Copy-pasting a polished widget and tweaking classes page by page. The first divergence is the start of the drift; every subsequent page makes the contract harder to recover.
+- Copy-pasting a polished widget and tweaking classes page by page. The first divergence starts the drift; every later page makes the contract harder to recover.
 - Creating near-duplicate components with different names but the same semantic purpose. `feature-card`, `feature-tile`, and `benefit-card` that differ only in padding and CTA copy are one component with one variant axis.
 - Fixing drift by adding more one-off CSS selectors. Page-local overrides reduce the symptom and reproduce the disease at the next site of drift.
-- Making one component so generic that every call site needs overrides to look right. Generic components without strong defaults push the styling burden back to the page, which is where the drift lives.
-- Hardcoding a DOM `id` (or an `aria-controls` / `aria-labelledby` target) inside a reusable component. Rendered more than once on a page it produces duplicate ids: invalid HTML, a Lighthouse `duplicate-id` (or axe `duplicate-id-aria`) failure, and broken ARIA wiring (a label or control points at the wrong instance). Generate a unique id per instance and namespace children under it.
+- Making one component so generic that every call site needs overrides to look right. Generic components without strong defaults push the styling burden back to the page, where the drift lives.
+
+Plus the `id` trap: hardcoding a DOM `id` (or an `aria-controls`/`aria-labelledby` target) inside a reusable component rendered more than once produces duplicate ids: invalid HTML, a Lighthouse `duplicate-id` (or axe `duplicate-id-aria`) failure, and broken ARIA wiring (a label or control points at the wrong instance). Generate a unique id per instance and namespace children under it.
 
 ## Slots and Composition Over Prop Explosion
 
-The over-generic-component anti-pattern resolves to slots, not more props. When a component needs to vary by structure (a card with an optional badge above the title, a section with an optional aside, a hero with an optional footnote), exposing a slot keeps the component small AND the call site readable. Exposing another shape prop produces a god-component that nobody can use without reading its source.
+The over-generic-component anti-pattern resolves to slots, not more props. Rule: if you would need three or more shape props (props that change WHICH elements render, not WHAT they contain), use a slot instead.
 
-The rule: if you would need three or more shape props (props that change which elements render, not props that change what those elements contain), use a slot instead.
-
-- A slot is `children` (the default slot), named slots like `<header>` and `<footer>` (web components, single-file frameworks), or render props (component-as-function patterns). Whichever the framework supports, expose composition explicitly.
+- A slot is `children` (the default slot), named slots like `<header>` and `<footer>` (web components, single-file frameworks), or render props (component-as-function patterns). Expose composition explicitly per framework.
 - Reach for slots when the variation is structural: optional sections, optional decorations, optional adjacent content.
 - Stay on props when the variation is data: title text, image URL, CTA label, variant name (one named variant prop, not a knob per CSS property).
-- Composed components stay testable: each slot has a known contract; the parent does not need to know what fills it.
-- Slots prevent the prop explosion -> drift cycle: when adding a fourth shape prop is the only way to support a new variant, the call site eventually wires the props together inconsistently and the family drifts again.
+- Composed components stay testable: each slot has a known contract; the parent need not know what fills it. Slots break the prop-explosion to drift cycle.
 
 ## Drift Detection
 
-Programmatic drift detection complements visual review. Collect computed styles and bounding boxes for every member of a family across every route, then flag any difference not explained by a named variant.
-
-For each repeated widget selector, collect:
+Programmatic detection complements visual review. For each repeated widget selector, collect:
 
 - Width, height, padding, border-radius, border color, border width, border style, background, box-shadow.
 - Heading font-size, weight, line-height.
@@ -159,7 +153,7 @@ For each repeated widget selector, collect:
 - Image and logo rendered size and aspect ratio.
 - Grid row height variance across the row.
 
-Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent). The snippet below uses only standard DOM and CSSOM APIs:
+Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent). The snippet uses only standard DOM and CSSOM APIs:
 
 ```js
 const componentMetrics = await page.evaluate(() => {
@@ -202,28 +196,16 @@ const componentMetrics = await page.evaluate(() => {
 });
 ```
 
-Run the collector on every route in scope. Compare the result for each family across pages. Any difference in padding, radius, shadow, heading size, or CTA position that is not explained by a named variant is drift; fix the component (not the page) until the next run is clean.
-
-A family is drift-free when every same-variant instance produces the same metrics within rounding tolerance.
+Run the collector on every route in scope and compare each family across pages. Any difference in padding, radius, shadow, heading size, or CTA position not explained by a named variant is drift: fix the component (not the page) until the next run is clean. A family is drift-free when every same-variant instance produces the same metrics within rounding tolerance.
 
 ## CSS Patterns That Prevent Drift
 
-These patterns reduce the surface area for drift before it starts. Use them on every shared widget. Detailed treatment of layout primitives lives in [responsive.md](responsive.md); detailed treatment of color, typography, and shadow tokens lives in [design.md](design.md). The patterns below are the multi-instance subset.
+Use these on every shared widget; they are the multi-instance subset. Layout primitives live in [responsive.md](responsive.md); color, typography, and shadow tokens in [design.md](design.md).
 
-### Tokens before primitives
+- Tokens before primitives: normalize spacing, color, border, radius, shadow, and type-scale tokens before building. A component referencing tokens stays in step; one that hardcodes values drifts.
+- Stable dimensions for repeated UI: `min-height` on cards prevents short-content rows from collapsing; `aspect-ratio` on media boxes prevents image jitter; `align-items: stretch` on grid/flex rows keeps siblings the same height; fixed icon boxes (square wrapper around the SVG) prevent optical mis-centering.
 
-Normalize spacing, color, border, radius, shadow, and type scale tokens before building components. A component that references tokens stays in step with the system; a component that hardcodes values drifts from it.
-
-### Stable dimensions for repeated UI
-
-Card rows, logo tiles, and grid items must hold a consistent shape regardless of content length.
-
-- `min-height` on cards prevents short-content rows from collapsing.
-- `aspect-ratio` on media boxes prevents image jitter.
-- `align-items: stretch` on grid and flex rows keeps siblings the same height.
-- Fixed icon boxes (square wrapper around the SVG) prevent optical mis-centering.
-
-### Card grid pattern
+Card grid pattern:
 
 ```css
 .card-grid {
@@ -260,70 +242,42 @@ Card rows, logo tiles, and grid items must hold a consistent shape regardless of
 }
 ```
 
-The `min-width: 0` on grid children is the most-skipped guard against text overflow. Without it, long words break out of the cell and drag the page wide on mobile.
-
-`color-mix(in srgb, ...)` is Baseline 2024. Older browsers fall back to the preceding `outline` declaration, so always provide the static-color line first. If the project supports browsers older than the 2024 baseline, drop the `color-mix` line entirely and use a precomputed token (`var(--color-focus-ring)`) instead.
-
-### Spacing via gap, not margin stacks
-
-Use `gap` for internal spacing on flex and grid containers. Margin stacks accumulate across instances and produce per-page drift; `gap` is owned by the container and stays constant.
-
-### Line length via max-width
-
-Constrain prose with `max-inline-size: 65ch` (or similar). Cards without measure constraints produce 90-character lines on desktop and 30-character lines on mobile, neither of which reads cleanly.
-
-### Full-card anchor, not nested anchors
-
-When a card visually behaves as a link, the entire card is the anchor. Nested anchors are invalid HTML and produce inconsistent click areas. If a card needs an inner CTA distinct from the outer link, switch to the button-card pattern: a stretched `::before` pseudo-element on the title link makes the whole card clickable while keeping nested controls separate.
-
-### Hover transforms do not stack
-
-If the card animates on hover and an inner CTA also animates, the two transforms compose and produce a buggy shift. Pick one layer for the hover transform; suppress the other inside the animated container.
-
-### Focus-visible, not focus
-
-Use `:focus-visible` so mouse users do not see a ring when clicking but keyboard users always do. The ring must be 2 to 4 px, with 3:1 contrast against both the surface and the resting state. Detailed contrast targets live in [accessibility.md](accessibility.md).
-
-### Image loading strategy per role
-
-- Hero LCP image: `loading="eager"`, `fetchpriority="high"`, declared `width` and `height`, `srcset` plus `sizes` for responsive widths.
-- Below-the-fold imagery: `loading="lazy"`, `decoding="async"`.
-- Logo tiles and avatars: fixed intrinsic dimensions, consistent ratio across the family.
-
-Performance treatment of images and fonts lives in [performance.md](performance.md); the rule above is the multi-instance one.
-
-### Visible text is the accessible name
-
-Do not hide visible text behind a mismatched `aria-label`. If the visible text names the control well, let it be the accessible name. When a control is icon-only, the `aria-label` matches the visible meaning the icon conveys.
+- `min-width: 0` on grid children is the most-skipped guard against text overflow. Without it, long words break out of the cell and drag the page wide on mobile.
+- `color-mix(in srgb, ...)` is Baseline 2024. Always provide the static-color `outline` line first as the fallback. If the project supports pre-2024 browsers, drop the `color-mix` line and use a precomputed token (`var(--color-focus-ring)`).
+- Spacing via `gap`, not margin stacks: `gap` is owned by the container and stays constant; margin stacks accumulate across instances and produce per-page drift.
+- Line length via `max-inline-size: 65ch` (or similar). Cards without measure constraints produce 90-character lines on desktop and 30-character lines on mobile.
+- Full-card anchor, not nested anchors: when a card visually behaves as a link, the entire card is the anchor. Nested anchors are invalid HTML. For an inner CTA distinct from the outer link, switch to the button-card pattern: a stretched `::before` pseudo-element on the title link makes the whole card clickable while keeping nested controls separate.
+- Hover transforms do not stack: if the card animates on hover and an inner CTA also animates, the two transforms compose into a buggy shift. Pick one layer for the hover transform and suppress the other inside the animated container.
+- `:focus-visible`, not `:focus`: mouse users get no ring on click, keyboard users always do. The ring is 2 to 4 px with 3:1 contrast against both the surface and the resting state. See [accessibility.md](accessibility.md).
+- Image loading strategy per role: hero LCP image uses `loading="eager"`, `fetchpriority="high"`, declared `width` and `height`, plus `srcset` and `sizes`; below-the-fold imagery uses `loading="lazy"`, `decoding="async"`; logo tiles and avatars use fixed intrinsic dimensions with consistent ratio across the family. See [performance.md](performance.md).
+- Visible text is the accessible name: do not hide visible text behind a mismatched `aria-label`. When a control is icon-only, the `aria-label` matches the meaning the icon conveys.
 
 ## Component Playground Discipline
 
-A component playground (Storybook, Histoire, Ladle, or any component workshop) is where the contract is exercised in isolation. If a state is not in a story, it is not in the contract.
+A component playground (Storybook or any component workshop) exercises the contract in isolation. If a state is not in a story, it is not in the contract.
 
-- **One story per variant**: every named variant in the contract has its own story. Reviewers compare variants side-by-side without spinning up the host app.
-- **One matrix story per family**: a single story renders every state-by-prop combination on one page. Resting, hover, focus, disabled, loading, error; primary, secondary, ghost; small, medium, large. The matrix catches the unrendered combinations before a designer has to.
-- **Visual regression on the story tree, not on integration screens**: snapshot each story and the matrix story; gate PRs on the story-tree diff. Integration-level visual tests are flaky (data shifts, animations time out) and miss component-level drift. Story-level tests are deterministic.
-- **Interaction tests live next to stories**: a story that exercises an interaction (click, focus, submit) carries its own play function and assertions. The playground is the test surface for the contract.
-- **Stories ship with the component**, in the same package, in the same review. A component without stories is not done.
+- One story per variant: every named variant in the contract has its own story; reviewers compare variants side-by-side without the host app.
+- One matrix story per family: a single story renders every state-by-prop combination on one page (resting, hover, focus, disabled, loading, error; primary, secondary, ghost; small, medium, large). The matrix catches unrendered combinations.
+- Visual regression on the story tree, not on integration screens: snapshot each story and the matrix story; gate PRs on the story-tree diff. Integration-level visual tests are flaky (data shifts, animation timeouts) and miss component-level drift. Story-level tests are deterministic.
+- Interaction tests live next to stories: a story exercising an interaction (click, focus, submit) carries its own play function and assertions.
+- Stories ship with the component, in the same package and the same review. A component without stories is not done.
 
 ## Token Transformation Pipeline
 
-Design tokens live in one place, not in CSS, JS, iOS, Android, and Figma independently. A transformation pipeline takes the single source of truth and emits every target output. Choose ONE pipeline; mixing them produces drift between targets.
+Design tokens live in one place, not in CSS, JS, iOS, Android, and the design tool independently. One transformation pipeline takes the single source of truth and emits every target. Choose ONE pipeline; mixing them produces drift between targets.
 
-- **Source format**: a single JSON or YAML file (or a small directory of them) that defines color, spacing, typography, radius, shadow, motion, and z-index tokens with semantic names. The W3C Design Tokens Community Group format is the standard worth aiming for: it is platform-neutral and tool-agnostic, so the source survives a future tool change.
-- **Pipelines that read the source**:
-  - **Style Dictionary**: mature, scriptable, emits CSS variables, JS exports (ESM and CJS), iOS Swift, Android XML, and arbitrary custom formats via JS templates. Use when the team wants to control the pipeline and ship to multiple platforms.
-  - **Tokens Studio**: Figma plugin that round-trips tokens between design and code; integrates with Style Dictionary as the build step. Use when designers own the tokens and need a Figma-first edit surface.
-  - **W3C DTCG-compatible CLI**: a smaller, format-faithful build that emits whichever targets the project needs without the broader Style Dictionary surface. Use when the project commits to the W3C format and wants the lowest pipeline complexity.
-- **Outputs to emit by default**: CSS custom properties (a `:root` block per theme), a JS or TS export module, optionally platform-specific outputs (iOS, Android) when relevant.
-- **Pipeline runs in CI**: the build emits the outputs from the source on every commit; the outputs are committed (or generated and consumed inline). A drift between source and output is the kind of bug that ships unnoticed.
-- **No raw hex, raw px, or raw ms in component CSS**: every value comes from a token. Lint enforces it.
+- Source format: a single JSON or YAML file (or a small directory) defining color, spacing, typography, radius, shadow, motion, and z-index tokens with semantic names. Aim for the W3C Design Tokens Community Group (DTCG) format: platform-neutral and tool-agnostic, so the source survives a future tool change.
+- Pipeline options that read the source:
+  - A mature scriptable build that emits CSS variables, JS exports (ESM and CJS), iOS Swift, Android XML, and arbitrary custom formats via JS templates. Use when the team controls the pipeline and ships to multiple platforms.
+  - A design-tool plugin that round-trips tokens between design and code and integrates with the scriptable build as its build step. Use when designers own the tokens and need a design-first edit surface.
+  - A smaller, format-faithful DTCG-compatible CLI that emits whichever targets the project needs without the broader surface. Use when the project commits to the W3C format and wants the lowest pipeline complexity.
+- Outputs by default: CSS custom properties (a `:root` block per theme), a JS or TS export module, and optionally platform-specific outputs (iOS, Android) when relevant.
+- Pipeline runs in CI: it emits outputs from the source on every commit; outputs are committed (or generated and consumed inline). Drift between source and output ships unnoticed.
+- No raw hex, raw px, or raw ms in component CSS: every value comes from a token, and lint enforces it.
 
 ## See Also
 
-- [audit-workflow.md](audit-workflow.md) for the multi-page audit procedure that builds the widget inventory
-- [defects.md](defects.md) for symptom-to-fix lookup and the canonical geometry sweep
-- [ui-ux.md](ui-ux.md) for state coverage and interaction patterns
-- [accessibility.md](accessibility.md) for focus-visible, accessible names, and contrast rules referenced in the CSS patterns above
-- [responsive.md](responsive.md) for layout primitives
-- [design.md](design.md) for tokens, typography, and shadow language
+- [audit-workflow.md](audit-workflow.md): the multi-page audit procedure that builds the widget inventory.
+- [defects.md](defects.md): symptom-to-fix lookup and the canonical geometry sweep.
+- [ui-ux.md](ui-ux.md): state coverage and interaction patterns.
+- [design.md](design.md): tokens, typography, and shadow language.

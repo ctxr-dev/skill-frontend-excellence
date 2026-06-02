@@ -27,10 +27,11 @@ npm run validate
 
 This runs:
 
-- `markdownlint-cli2` over `SKILL.md` and `references/**/*.md`
 - `node scripts/check-no-dashes.mjs` to reject em (U+2014) and en (U+2013) dashes
+- `node scripts/validate-structure.mjs` to enforce the frontmatter and routing contract (complete frontmatter, closed-vocabulary keywords, no routing orphan, resolving links and section pointers, accurate `size:`)
+- `markdownlint-cli2` over `SKILL.md` and `references/**/*.md`
 
-Both must pass before commit. The pre-commit hook enforces this.
+All three must pass before commit. The pre-commit hook enforces this. Run `npm run validate:structure:fix` to auto-correct drifted `size:` fields.
 
 ## Style Rules
 
@@ -73,32 +74,43 @@ Field rules:
 - **`related`**: two to four sibling files most likely to be loaded with this one. Builds the connected graph; no file is a leaf. Cross-link from each file's "See also" footer to a subset of `related:`.
 - **`size`**: approximate line count, `~N lines`. The agent uses this to budget context.
 
-When you add a new reference file: place it under `references/`, give it the frontmatter, add a row to the `SKILL.md` Reference Index, and add it to the `related:` list of at least one existing file. Run `npm run validate` to confirm structural integrity.
+When you add a new reference file: place it under `references/`, give it the frontmatter, add a row to the `SKILL.md` Reference Index, **add it to at least one of the By-Task or By-Symptom routing tables** (no file may be reachable only via the Reference Index), and add it to the `related:` list of at least one existing file. Run `npm run validate` to confirm structural integrity. The structural validator fails on a missing frontmatter field, an off-vocabulary keyword, a routing orphan, a broken link, a bad section pointer, or a stale `size:`.
+
+### Routing section pointers
+
+A routing-table row may point at one section of a large file instead of the whole file, using the heading anchor:
+
+```text
+[performance.md: Font Strategy](references/performance.md#font-strategy)
+```
+
+The anchor is the GitHub-style slug of a real `##` heading in that file (lowercase, spaces to hyphens, punctuation dropped). The validator resolves every anchor against the target file's headings, so a renamed or mistyped heading fails CI. Use section pointers by heading name, never line numbers.
 
 ## Keyword glossary (the corpus vocabulary)
 
-The skill builds its agent-routing index from a closed vocabulary. Using the SAME word for the same concept across files is the whole point: it keeps the semantic tree consistent so an agent's substring match resolves cleanly. When you need a concept not listed, ADD it here in the same PR.
+The skill builds its agent-routing index from a closed vocabulary. Using the SAME word for the same concept across files is the whole point: it keeps the semantic tree consistent so an agent's substring match resolves cleanly. When you need a concept not listed, ADD it here AND to the `TASK_KEYWORDS` / `SYMPTOMS` sets in `scripts/validate-structure.mjs` (the machine-authoritative copy that CI enforces), in the same PR.
 
 ### Task-keyword vocabulary
 
 Grouped by domain (the group itself is not the keyword; the items are):
 
-- **Core Web Vitals and perf**: `LCP`, `INP`, `CLS`, `TTFB`, `FCP`, `TBT`, `performance`, `hydration`, `bundle`, `preload`, `prefetch`, `Speculation Rules`, `Early Hints`, `fetchpriority`, `BFCache`, `render strategy`, `SSR`, `SSG`, `CSR`, `streaming`, `islands`, `partial hydration`, `resumable`
-- **Accessibility**: `accessibility`, `a11y`, `WCAG`, `screen reader`, `keyboard`, `focus`, `contrast`, `semantic HTML`, `ARIA`, `dynamic type`, `reduced motion`, `forced colors`, `axe`
-- **SEO**: `SEO`, `indexing`, `canonical`, `sitemap`, `robots`, `structured data`, `JSON-LD`, `AEO`, `GEO`, `llms.txt`, `hreflang`, `Open Graph`, `meta description`, `title tag`
+- **Core Web Vitals and perf**: `LCP`, `INP`, `CLS`, `TTFB`, `FCP`, `TBT`, `performance`, `hydration`, `bundle`, `preload`, `prefetch`, `Speculation Rules`, `Early Hints`, `fetchpriority`, `BFCache`, `render strategy`, `SSR`, `SSG`, `CSR`, `ISR`, `streaming`, `islands`, `partial hydration`, `resumable`
+- **Accessibility**: `accessibility`, `a11y`, `WCAG`, `screen reader`, `keyboard`, `focus`, `contrast`, `semantic HTML`, `ARIA`, `dynamic type`, `reduced motion`, `forced colors`, `axe`, `inline SVG`
+- **SEO**: `SEO`, `indexing`, `canonical`, `sitemap`, `robots`, `structured data`, `JSON-LD`, `AEO`, `GEO`, `llms.txt`, `hreflang`, `Open Graph`, `meta description`, `title tag`, `clean URLs`
+- **Lighthouse**: `lighthouse`, `diagnostic Insights`, `phantom failure`, `errors-in-console`, `image-size-responsive`
 - **UI / UX**: `UI`, `UX`, `interaction`, `hover`, `press`, `loading state`, `error state`, `empty state`, `success state`, `modal`, `popover`, `dialog`, `drawer`, `sheet`, `menu`, `tooltip`, `snackbar`, `toast`, `breadcrumb`, `navigation`, `touch target`, `hit target`, `popover API`, `inert`
 - **Design**: `design`, `typography`, `color`, `palette`, `OKLCH`, `P3`, `wide gamut`, `spacing`, `composition`, `atmosphere`, `dark mode`, `light mode`, `brand`, `font`, `variable font`
-- **Responsive**: `responsive`, `breakpoint`, `mobile`, `tablet`, `desktop`, `container query`, `viewport`, `safe area`, `dvh`, `srcset`, `fluid typography`, `subgrid`, `scrollbar-gutter`
+- **Responsive**: `responsive`, `breakpoint`, `mobile`, `tablet`, `desktop`, `container query`, `viewport`, `safe area`, `dvh`, `srcset`, `DPR`, `fluid typography`, `subgrid`, `scrollbar-gutter`
 - **Motion**: `motion`, `animation`, `transition`, `easing`, `View Transitions`, `scroll-driven`, `WAAPI`, `will-change`, `@starting-style`
 - **Forms**: `form`, `validation`, `autofill`, `autocomplete`, `label`, `input`, `select`, `checkbox`, `radio`, `file upload`, `constraintValidation`
 - **Data viz**: `chart`, `data viz`, `axis`, `legend`, `colorblind`, `Canvas`, `SVG`, `WebGL`, `timezone`, `DST`
 - **Pre-launch**: `pre-launch`, `checklist`, `ship`, `release`, `deployment`, `gate`, `verification`, `evidence`
-- **Audit / polish**: `audit`, `route`, `sweep`, `screenshot`, `baseline`, `capture`, `polish`, `drift`
+- **Audit / polish**: `audit`, `route`, `sweep`, `screenshot`, `baseline`, `capture`, `polish`, `drift`, `measurable bars`
 - **Components**: `component`, `widget`, `contract`, `extraction`, `slots`, `composition`, `Storybook`, `tokens`
 - **Defects**: `defect`, `bug`, `regression`, `geometry`, `threshold`
 - **Security**: `security`, `CSP`, `COOP`, `COEP`, `CORP`, `cross-origin isolation`, `SRI`, `Trusted Types`, `Permissions-Policy`, `Referrer-Policy`, `frame-ancestors`
 - **Observability**: `observability`, `RUM`, `monitoring`, `error capture`, `source maps`, `INP attribution`, `Reporting API`, `error boundary`, `CrUX`, `Long Animation Frames`, `LoAF`
-- **Testing**: `testing`, `visual regression`, `axe-core`, `pa11y`, `size-limit`, `bundlesize`, `lighthouse-ci`, `contract test`, `type check`
+- **Testing**: `testing`, `visual regression`, `axe-core`, `pa11y`, `size-limit`, `bundlesize`, `lighthouse-ci`, `contract test`, `type check`, `hermetic gate`
 - **Auth**: `auth`, `authentication`, `login`, `signup`, `passkey`, `WebAuthn`, `OAuth`, `magic link`, `session`, `account recovery`, `CAPTCHA`, `Turnstile`, `Storage Access API`
 - **Debug**: `debug`, `recipe`, `hydration mismatch`, `layout overflow`, `focus trap`, `font-swap CLS`
 - **Anti-patterns**: `anti-pattern`, `what to avoid`, `mistake`
@@ -113,7 +125,7 @@ Grouped by domain (the group itself is not the keyword; the items are):
 
 Use these EXACT strings (the agent matches by substring):
 
-`LCP > 2.5s`, `LCP regression`, `INP > 200ms`, `INP regression`, `CLS > 0.1`, `CLS regression`, `slow page`, `slow interaction`, `score dropped`, `Lighthouse score drop`, `bundle size grew`, `hydration mismatch`, `focus trap leak`, `duplicate id`, `horizontal scroll`, `viewport overflow`, `broken on Firefox`, `broken on Safari`, `font swap CLS`, `iOS 100vh`, `rubber-band scroll`, `third-party script slow`, `focus not visible`, `contrast fail`, `aria-hidden leak`, `inert leak`, `noindex with sitemap`, `canonical mismatch`, `consent banner CLS`, `popover not dismissing`, `scroll lock side shift`, `auth redirect loop`, `passkey not offered`, `RTL broken`, `dark mode broken`
+`LCP > 2.5s`, `LCP regression`, `INP > 200ms`, `INP regression`, `CLS > 0.1`, `CLS regression`, `slow page`, `slow interaction`, `score dropped`, `Lighthouse score drop`, `bundle size grew`, `hydration mismatch`, `focus trap leak`, `duplicate id`, `horizontal scroll`, `viewport overflow`, `broken on Firefox`, `broken on Safari`, `font swap CLS`, `iOS 100vh`, `rubber-band scroll`, `third-party script slow`, `focus not visible`, `contrast fail`, `aria-hidden leak`, `inert leak`, `noindex with sitemap`, `canonical mismatch`, `consent banner CLS`, `popover not dismissing`, `scroll lock side shift`, `auth redirect loop`, `passkey not offered`, `RTL broken`, `dark mode broken`, `phantom dev failure`, `errors-in-console`, `image too small on retina`, `stale SRI beacon`
 
 ### Synonym clusters
 

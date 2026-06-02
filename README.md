@@ -47,29 +47,17 @@ Pins the skill at a specific commit; update explicitly via `git submodule update
 
 Agent Skills-compatible harnesses (Claude Code, Codex CLI) surface this skill automatically based on the YAML frontmatter at the top of `SKILL.md`. The `description` field tells the host when to load it: any prompt that touches how an interface looks, feels, moves, loads, ranks, or is interacted with will trigger activation.
 
-When the skill is active, the host reads `SKILL.md` first (the entry point with the North Star Targets, priority stack, workflow, the Multi-Page Polish Loop, and the 35 highest-leverage rules), then loads only the topical reference under `references/` that matches the current work. There is nothing to invoke manually; install the skill and proceed with the task.
+When the skill is active, the host reads `SKILL.md` first (the entry point with the North Star Targets, priority stack, workflow, the Multi-Page Polish Loop, and the routing tables), then loads only the topical reference under `references/` that matches the current work. There is nothing to invoke manually; install the skill and proceed with the task.
 
 For the canonical entry point, read [`SKILL.md`](SKILL.md).
 
 ## What's Inside
 
-| File | Use when |
-|------|---------|
-| [SKILL.md](SKILL.md) | Entry point. North Star Targets, priority stack, workflow, Multi-Page Polish Loop, the 35 highest-leverage rules, self-improvement checklist. |
-| [references/lighthouse.md](references/lighthouse.md) | Running a Lighthouse audit, interpreting scores, fixing failing audits, setting up CI gates. |
-| [references/performance.md](references/performance.md) | Optimizing assets, JS execution, hydration, render strategy, network, caching, fonts, images. |
-| [references/accessibility.md](references/accessibility.md) | WCAG 2.2 AA: semantic HTML, ARIA, keyboard, focus, screen reader, contrast, dynamic type, reduced motion. |
-| [references/seo.md](references/seo.md) | Meta tags, headings, structured data, canonicals, sitemaps, robots, internal linking, content quality. |
-| [references/ui-ux.md](references/ui-ux.md) | Touch targets, navigation, density, hover/press/focus states, hierarchy, empty/loading/error states. |
-| [references/design.md](references/design.md) | Typography, color, spacing, composition, atmosphere, dark/light parity, avoiding generic AI styling. |
-| [references/responsive.md](references/responsive.md) | Breakpoints, mobile-first, container queries, fluid typography, safe areas, viewport units. |
-| [references/motion.md](references/motion.md) | Timing, easing, principles, reduced-motion, transform-only animation, choreography. |
-| [references/forms.md](references/forms.md) | Validation, error placement, autofill, autosave, success/error states, multi-step flows. |
-| [references/data-viz.md](references/data-viz.md) | Chart selection, axes, legends, color, accessibility, large datasets. |
-| [references/pre-launch.md](references/pre-launch.md) | Final verification gate before declaring a page complete. |
-| [references/audit-workflow.md](references/audit-workflow.md) | Auditing or polishing an existing multi-page site against a reference; route-by-route capture, fix, and verify procedure. |
-| [references/components.md](references/components.md) | Standardizing repeated widgets, defining component contracts, detecting drift across pages. |
-| [references/defects.md](references/defects.md) | Symptom-to-fix lookup for common visible defects and the canonical programmatic geometry sweep. |
+- [`SKILL.md`](SKILL.md): the entry point. North Star Targets, priority stack, conflict tie-breakers, the render-strategy decision, the routing tables (by task, by symptom, and the full Reference Index), the Multi-Page Polish Loop, and the self-improvement checklist.
+- `references/`: topical deep dives (Lighthouse, performance, accessibility, SEO, design, responsive, motion, forms, data-viz, components, security, testing, observability, auth, i18n, PWA, embed, print and email, and more), each carrying YAML frontmatter so a host loads only what the current task needs.
+- Index surfaces: [`references/quick-reference.md`](references/quick-reference.md) (the highest-leverage rules in one scan) and [`references/anti-patterns.md`](references/anti-patterns.md) (one row per anti-pattern with its standard fix).
+
+The canonical, always-current list of every reference file and when to load it is the **Reference Index inside [`SKILL.md`](SKILL.md)**. This README intentionally does not duplicate it, to avoid drift.
 
 ## North Star Targets
 

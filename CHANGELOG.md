@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
+A corpus-wide density and navigation pass, a machine-enforced structural contract, and the field-tested refinements from a verified 100 / 100 / 100 / 100 build.
+
+### Added
+
+- **Structural validator** (`scripts/validate-structure.mjs`, wired into `npm run validate`, CI, and the pre-commit hook). It enforces what the skill's determinism rests on: complete YAML frontmatter on every reference file, `load-when` keywords and symptoms drawn from the closed vocabulary, no routing orphan (every file reachable from By-Task or By-Symptom, not just the Reference Index), every routing link and `related:` entry resolving, every section-pointer anchor matching a real heading, and an auto-maintained `size:`.
+- **Routing section pointers.** The By-Symptom table now jumps to a specific section of a file (for example `performance.md` at "Font Strategy") by heading anchor, so an agent reads the one relevant section, not a whole 600-line file. By-Task and By-Symptom use links throughout and together cover every reference file (the previously index-only `anti-patterns.md` and `data-viz.md` are now task-routed).
+- **Field-tested refinements**, folded into their topical files principle-first and framework-agnostic:
+  - CSS-delivery changes can reorder the cascade and silently regress contrast, so re-run axe on every route after any delivery change (`lighthouse.md`, `anti-patterns.md`, `quick-reference.md`).
+  - Scored audits versus diagnostic Insights: do not chase a clean Insight when the scored metric is already green (`lighthouse.md`).
+  - A dev server manufactures phantom failures; score a production build via the framework preview or the live edge, and the live or field number outranks any local run (`lighthouse.md`, `debug-recipes.md`, `quick-reference.md`).
+  - `errors-in-console` from a third-party beacon: separate a client-blocker false positive from a real stale-SRI auto-injection bug with a clean headless reproduce (`debug-recipes.md`, `lighthouse.md`, `anti-patterns.md`).
+  - Responsive images must cover CSS width times device pixel ratio, with the arithmetic (`responsive.md`, `lighthouse.md`, `quick-reference.md`).
+  - Above-the-fold animation ships only past a Lighthouse budget gate, or it is cut (`motion.md`, `quick-reference.md`).
+  - Static-host clean URLs are a three-part contract with a flat-file audit gotcha, and a 410 from a submission endpoint means delete the integration (`seo.md`).
+  - Inline SVG is `aria-hidden` or `role="img"` with a name, never a role without a name (`accessibility.md`, `anti-patterns.md`, `quick-reference.md`).
+  - CI realism for a perfect-score pipeline: keep self-injected third-party tags out of the hermetic gate, gate Performance at a floor while holding the other three at 100, do not oversubscribe runner cores, and place slow gates by feedback cost (`testing.md`).
+  - Keep tool scratch out of the dev watcher and shard generated audit artifacts (`build-hygiene.md`); restate a vague quality goal as per-route numeric bars before acting (`audit-workflow.md`); build-time-optimize images inside islands (`performance.md`).
+
+### Changed
+
+- **Corpus-wide density pass.** Every reference file was rewritten to cut prose, hedging, and cross-file repetition and to reformat rules into tables and checklists. The corpus dropped about 1700 lines (roughly 14 percent) while preserving every field-tested check: a 3608-item checks inventory was extracted before the pass and verified after with zero losses. Cross-cutting checks now live once in a canonical home and are echoed as one-liners elsewhere.
+- `quick-reference.md` grew to 44 rules (four new high-leverage one-liners) and `anti-patterns.md` gained three rows.
+- `CONTRIBUTING.md` now documents the structural validator, the section-pointer syntax, the closed-vocabulary additions, and the rule that a new file must join a routing table.
+- `README.md` no longer duplicates the reference list; the Reference Index in `SKILL.md` is the single source.
+
 ## [0.2.1] - 2026-05-30
 
 ### Changed

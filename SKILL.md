@@ -109,28 +109,36 @@ Pick the row that matches what you have been asked to do. Load the named files f
 | Add PWA, offline, or installability | [pwa-offline.md](references/pwa-offline.md), [performance.md](references/performance.md) |
 | Embed third-party widgets or be embedded | [embed-patterns.md](references/embed-patterns.md), [security.md](references/security.md), [auth.md](references/auth.md) |
 | Print stylesheet or transactional email HTML | [print-email.md](references/print-email.md) |
+| Add charts, tables, or data display | [data-viz.md](references/data-viz.md), [ui-ux.md](references/ui-ux.md), [accessibility.md](references/accessibility.md) |
+| Add or refine motion and animation | [motion.md](references/motion.md), [performance.md](references/performance.md) |
+| Review a change against known anti-patterns | [anti-patterns.md](references/anti-patterns.md), [defects.md](references/defects.md) |
 
 ## Routing: by symptom
 
-Use observable problem signals to jump straight to the relevant file.
+Use observable problem signals to jump straight to the relevant file and section.
 
-| Symptom | Likely root, file to load |
+| Symptom | Likely root, file and section to load |
 |---|---|
-| LCP > 2.5s, LCP regression | preload / `fetchpriority` / hydration cost: `performance.md` |
-| INP > 200ms, slow interaction | long task / handler / hydration: `performance.md` (INP attribution), `debug-recipes.md` |
-| CLS > 0.1, layout jump | async element not reserved: `performance.md`, `defects.md` |
-| Lighthouse SEO < 100 | `noindex` on a graded page, missing canonical: `lighthouse.md`, `seo.md` |
-| Lighthouse Best Practices < 100 | CSP violation, console errors, deprecation: `lighthouse.md`, `security.md` |
-| duplicate id warning | reused component with a hardcoded id: `components.md` |
-| scroll lock side shift | modal missing scrollbar-width compensation: `ui-ux.md`, `defects.md` |
-| hydration mismatch | server vs client divergence: `debug-recipes.md`, `performance.md` |
-| viewport overflow, horizontal scroll | bleed in a child element: `defects.md` |
-| focus trap leak, focus not visible | overlay focus management: `debug-recipes.md`, `ui-ux.md`, `accessibility.md` |
-| font swap CLS | missing `size-adjust` / metrics-override on fallback: `defects.md`, `performance.md` |
-| third-party script slow, analytics blocking | TPS / `partytown` / async-defer matrix: `performance.md`, `build-hygiene.md` |
-| broken on Firefox / Safari only | feature-support assumption, missing fallback: depends; check `motion.md`, `ui-ux.md`, `responsive.md` |
-| consent banner CLS, bounding box jumps | overlay not reserved: `seo.md`, `ui-ux.md` |
-| `aria-hidden` background still announced, inert leak | overlay applied to the wrong ancestor: `defects.md`, `ui-ux.md` |
+| LCP > 2.5s, LCP regression | preload / fetchpriority / hydration cost: [performance.md: Core Web Vitals](references/performance.md#core-web-vitals) |
+| INP > 200ms, slow interaction | long task / handler / hydration: [performance.md: Core Web Vitals](references/performance.md#core-web-vitals), [debug-recipes.md: INP regression](references/debug-recipes.md#inp-regression) |
+| CLS > 0.1, layout jump | async element not reserved: [performance.md: Core Web Vitals](references/performance.md#core-web-vitals), [defects.md: Defect Lookup Table](references/defects.md#defect-lookup-table) |
+| font swap CLS | missing size-adjust / metrics-override on the fallback: [debug-recipes.md: Font-swap CLS](references/debug-recipes.md#font-swap-cls), [performance.md: Font Strategy](references/performance.md#font-strategy) |
+| Lighthouse SEO < 100 | noindex on a graded page, missing canonical: [lighthouse.md: Failing Audit to Fix Map](references/lighthouse.md#failing-audit-to-fix-map), [seo.md: Indexability](references/seo.md#indexability) |
+| Lighthouse Best Practices < 100 | CSP violation, console errors, deprecation: [lighthouse.md: Failing Audit to Fix Map](references/lighthouse.md#failing-audit-to-fix-map), [security.md: CSP at Depth](references/security.md#csp-at-depth) |
+| errors-in-console, stale SRI beacon | third-party beacon CORS / stale pinned hash, or a client-blocker false positive: [debug-recipes.md: Lighthouse flake triage](references/debug-recipes.md#lighthouse-flake-triage) |
+| phantom dev failure (low score only on the dev server) | scoring the dev server, not a production build: [lighthouse.md: Run Lighthouse Properly](references/lighthouse.md#run-lighthouse-properly) |
+| image too small on retina (image-size-responsive) | largest srcset candidate below CSS width times DPR: [responsive.md: Responsive Images](references/responsive.md#responsive-images), [lighthouse.md: Failing Audit to Fix Map](references/lighthouse.md#failing-audit-to-fix-map) |
+| contrast fail, especially after a build change | low ratio, or a CSS-delivery change that reordered the cascade: [accessibility.md: Color and Contrast](references/accessibility.md#color-and-contrast), [lighthouse.md: Failing Audit to Fix Map](references/lighthouse.md#failing-audit-to-fix-map) |
+| duplicate id | reused component with a hardcoded id: [components.md: Drift Detection](references/components.md#drift-detection) |
+| scroll lock side shift | modal missing scrollbar-width compensation: [ui-ux.md: Modals and Overlays](references/ui-ux.md#modals-and-overlays), [defects.md: Defect Lookup Table](references/defects.md#defect-lookup-table) |
+| hydration mismatch | server vs client divergence: [debug-recipes.md: Hydration mismatch](references/debug-recipes.md#hydration-mismatch), [performance.md: JavaScript Strategy](references/performance.md#javascript-strategy) |
+| viewport overflow, horizontal scroll | bleed in a child element: [responsive.md: Horizontal Scroll: Forbidden](references/responsive.md#horizontal-scroll-forbidden), [defects.md: Defect Lookup Table](references/defects.md#defect-lookup-table) |
+| focus trap leak, focus not visible | overlay focus management: [debug-recipes.md: Focus trap leak](references/debug-recipes.md#focus-trap-leak), [accessibility.md: Keyboard](references/accessibility.md#keyboard) |
+| third-party script slow, analytics blocking | third-party-script discipline / async-defer matrix: [performance.md: Third-Party Strategy](references/performance.md#third-party-strategy), [build-hygiene.md: Dependency-Cost Discipline](references/build-hygiene.md#dependency-cost-discipline) |
+| broken on Firefox / Safari only | feature-support assumption, missing fallback: [responsive.md: Media Preferences](references/responsive.md#media-preferences), [motion.md: Reduced Motion](references/motion.md#reduced-motion) |
+| consent banner CLS, bounding box jumps | overlay not reserved: [ui-ux.md: Modals and Overlays](references/ui-ux.md#modals-and-overlays), [seo.md: Indexability](references/seo.md#indexability) |
+| aria-hidden background still announced, inert leak | overlay applied to the wrong ancestor: [accessibility.md: Modal and Dialog](references/accessibility.md#modal-and-dialog), [ui-ux.md: Modals and Overlays](references/ui-ux.md#modals-and-overlays) |
+| hero animation regresses LCP or TBT | above-the-fold motion not gated against a budget: [motion.md: Hero Animations](references/motion.md#hero-animations) |
 
 ## Reference Index
 

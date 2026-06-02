@@ -1,65 +1,70 @@
 ---
 title: Frontend Observability
-purpose: Post-deploy production practice. Source maps in production, error capture surfaces, sampled RUM, INP field attribution, Reporting API, CrUX trend tracking, session replay tradeoffs, alert thresholds, synthetic monitoring.
+purpose: Post-deploy production practice covering source maps in production, error capture surfaces, sampled RUM, INP field attribution, the Reporting API, CrUX trend tracking, session replay tradeoffs, alert thresholds, and synthetic monitoring. Lighthouse measures a deploy; observability measures users, and one does not substitute for the other.
 load-when:
   task-keywords: [observability, RUM, monitoring, error capture, source maps, INP attribution, Reporting API, error boundary, CrUX, Long Animation Frames, LoAF, performance]
   symptoms: [score dropped, INP regression, LCP regression, slow page, slow interaction]
 prereq: SKILL.md
 related: [performance.md, lighthouse.md, debug-recipes.md, pre-launch.md]
-size: ~500 lines
+size: ~335 lines
 ---
 
 # Frontend Observability
 
-Lighthouse measures a deploy. Observability measures users. The two answer different questions and one does not substitute for the other. This file is the post-deploy practice: what to capture, how to capture it without burning user CPU, and where to set the alert thresholds.
-
-Framework-agnostic. Patterns named at the standard level (`PerformanceObserver`, `Reporting-Endpoints` header, `sendBeacon`). Vendor names appear only as concrete examples (Sentry, Datadog, etc.) of products that implement the pattern.
+Lighthouse measures a deploy; observability measures users. Patterns are named at the standard level (`PerformanceObserver`, `Reporting-Endpoints` header, `sendBeacon`). Vendor tools are referred to generically (error tracker, paging system) so the standard, not a product, is the contract.
 
 ## Source Maps in Production
 
-Production code is minified. Without source maps, every error is an opaque stack of `t.a is not a function`. With public source maps, you have shipped your codebase to attackers. The right answer is private upload.
+Minified production code turns every error into an opaque stack. Public maps disclose source. The answer is private upload.
 
-### The private-upload pipeline
+Principle: build hidden source maps, upload them to the error tracker out of band, strip the public source-map URL from the bundle.
 
-Build the bundle with hidden source maps. Upload the maps to your error tracker out of band. Strip the public-facing source-map URL from the bundle.
+Config by toolchain:
 
-```text
-# Webpack / Rspack
-devtool: 'hidden-source-map'
+- Webpack / Rspack: `devtool: 'hidden-source-map'`
+- Vite / Rollup: `build.sourcemap: 'hidden'`
+- esbuild: `sourcemap: 'external'` plus a script step to strip the `//# sourceMappingURL=` comment
 
-# Vite / Rollup
-build.sourcemap: 'hidden'
+The `hidden` variant emits `.map` files alongside the bundle but appends no `//# sourceMappingURL=` comment, so the browser never fetches them; the error tracker fetches them through its own upload pipeline (a CLI map-upload step).
 
-# esbuild
-sourcemap: 'external'  // plus a script step to strip the //# sourceMappingURL= comment
-```
+Checks:
 
-The `hidden` variant emits `.map` files alongside the bundle but does not append a `//# sourceMappingURL=` comment. The browser never fetches them. Your error tracker fetches them through its upload pipeline (Sentry CLI, Datadog `datadog-ci sourcemaps upload`, Rollbar `rollbar-cli sourcemaps upload`, Bugsnag `bugsnag-source-maps`).
+- `curl -sI https://your-cdn.example/static/main.<hash>.js.map` returns 403 or 404
+- The bundle contains no `//# sourceMappingURL=` comment
+- The error-tracker dashboard shows symbolicated stacks
+- Production HTML does not link to `.map` files
 
-Check: `curl -sI https://your-cdn.example/static/main.<hash>.js.map` returns 403 or 404. The bundle contains no `//# sourceMappingURL=` comment. Error-tracker dashboard shows symbolicated stacks. Production HTML does not link to `.map` files.
+### Source-map response header (cross-origin alternative)
 
-### Source-map response header (alternative)
+When the error tracker self-hosts maps on a different origin, the `SourceMap:` HTTP response header on the JS resource points at the map URL, restricted to the error-tracker IP range at the edge (a WAF IP allow-list).
 
-When self-hosting the error tracker and the map server is on a different origin, the `SourceMap:` HTTP response header on the JS resource can point at the map URL. Restrict the map URL to your error-tracker IPs at the edge (Cloudflare WAF rule, AWS WAF, nginx IP allow-list).
+Example:
 
 ```text
 GET /static/main.abc123.js
 SourceMap: https://maps.internal.your-domain.example/main.abc123.js.map
 ```
 
-Check: the map URL returns 200 only for the error-tracker's egress IP range; everything else returns 403. The IP range is documented and refreshed on every vendor update.
+Check: the map URL returns 200 only for the error-tracker egress IP range and 403 for everything else; the IP range is documented and refreshed on every vendor update.
 
 ### Never ship maps on the public CDN
 
-A `main.js.map` on the public CDN is a published source code disclosure. It includes original file paths, comments, and (often) inline-bundled secrets that the build evaluated. Mistake mode: build with `devtool: 'source-map'` (the default in many configs), deploy to the same path as the bundle, browser loads them as a friendly developer-experience touch.
+Principle: a `main.js.map` on the public CDN is source code disclosure (original file paths, comments, inline-bundled secrets). The mistake is building with `devtool: 'source-map'` (the default in many configs) and deploying it to the same path as the bundle.
 
-Check: pre-deploy script asserts no `*.map` files in the public output directory, or asserts they are excluded from the CDN upload manifest. CI fails when the assertion fails.
+Check: a pre-deploy script asserts no `*.map` files in the public output directory (or asserts they are excluded from the CDN upload manifest); CI fails when the assertion fails.
 
 ## Error Capture Surfaces
 
-A JS error is reported to your tracker through one of four hooks. Wire all four; each catches a different surface.
+A JS error reaches the tracker through one of four hooks. Wire all four; each catches a different surface.
 
-### window.onerror
+| Hook | Catches | Note |
+|------|---------|------|
+| `window.onerror` | synchronous uncaught errors from any script, including inline | mandatory baseline |
+| `unhandledrejection` | Promise rejections that never had a `.catch` | more than half of all reported errors in modern apps |
+| Error boundary (component-tree) | render/commit throws in a subtree | renders fallback UI, forwards error |
+| `ReportingObserver` | browser deprecations and interventions | never throw, never log to console outside DevTools |
+
+`window.onerror`:
 
 ```js
 window.addEventListener('error', (event) => {
@@ -74,9 +79,7 @@ window.addEventListener('error', (event) => {
 });
 ```
 
-Catches synchronous uncaught errors from any script on the page, including inline. Mandatory baseline.
-
-### unhandledrejection
+`unhandledrejection`:
 
 ```js
 window.addEventListener('unhandledrejection', (event) => {
@@ -88,19 +91,11 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 ```
 
-Catches Promise rejections that never had a `.catch`. In modern apps this is more than half of all reported errors (every async fetch, every async event handler).
+Check: a deliberate `Promise.reject(new Error('test'))` from the DevTools console arrives in the tracker within the expected sampling rate.
 
-Check: a deliberate `Promise.reject(new Error('test'))` from DevTools console arrives in the error tracker within the expected sampling rate.
+Error boundary: wire a component-tree boundary at every route and at every dangerous subtree (a chart, a third-party widget, a markdown renderer). It renders a fallback UI and forwards the error. Checks: every route has a boundary that renders a recovery UI without a full-page crash; boundary errors arrive with the route name and subtree identifier; a deliberate throw in a subtree does not blank the page.
 
-### Error boundaries (component-tree pattern)
-
-When the UI framework supports a component-tree boundary (Error Boundary in component frameworks, top-level routing guard in router frameworks), wire a boundary at every route and at every dangerous subtree (a chart, a third-party widget, a markdown renderer). The boundary renders a fallback UI and forwards the error.
-
-Pattern (framework-agnostic principle): a parent component declares "if my subtree throws during render or commit, catch the error here, render this fallback UI, report the error". The library shape varies; the contract is identical.
-
-Check: every route has a boundary that renders a recovery UI without a full-page crash. Boundary errors arrive in the tracker with the route name and the subtree identifier. A deliberate throw in a subtree does not blank the page.
-
-### ReportingObserver
+`ReportingObserver`:
 
 ```js
 const observer = new ReportingObserver((reports) => {
@@ -116,17 +111,11 @@ const observer = new ReportingObserver((reports) => {
 observer.observe();
 ```
 
-Catches browser-level deprecations and interventions: features removed from the platform, slow scripts the browser stopped, autoplay blocked. These never throw and never log to the console outside DevTools. The Reporting API surfaces them programmatically.
-
-Check: the observer is registered before any third-party script runs. Reports for `deprecation` and `intervention` types reach the tracker. The dashboard groups reports by source file for actionability.
+It catches features removed from the platform, slow scripts the browser stopped, and autoplay blocked. Checks: registered before any third-party script runs; `deprecation` and `intervention` reports reach the tracker; the dashboard groups reports by source file.
 
 ## Sampled RUM
 
-Lab numbers do not predict field numbers. Real-user monitoring is the only way to know what users experience.
-
-### web-vitals + attribution
-
-The `web-vitals` library (Google, MIT) is the standard. The `web-vitals/attribution` entry point adds per-metric debugging context (the LCP element, the INP event target, the CLS source).
+Lab numbers do not predict field numbers. Real-user monitoring is the only way to know what users experience. Use a field-metrics library exposing per-metric callbacks (`onLCP`, `onINP`, `onCLS`, `onFCP`, `onTTFB`) with an attribution entry point that adds per-metric debugging context (LCP element, INP event target, CLS source).
 
 ```js
 import { onLCP, onINP, onCLS, onFCP, onTTFB } from 'web-vitals/attribution';
@@ -159,23 +148,26 @@ addEventListener('pagehide', flush);
 
 Three things this gets right:
 
-1. **`sendBeacon` plus `visibilitychange`.** The only reliable flush for the BFCache and tab-close case. `fetch` with `keepalive: true` is a backup but loses entries when the browser kills the request.
-2. **Queue and batch.** One beacon per page session, not one per metric. Reduces beacon overhead.
-3. **Attribution payload.** When INP is bad on a page, the attribution object names the event target, the handler script, and the blocking time. Without this, you have a number and no lead.
+- `sendBeacon` plus `visibilitychange` is the only reliable flush for the BFCache and tab-close case; `fetch` with `keepalive: true` is a backup but loses entries when the browser kills the request.
+- Queue and batch: one beacon per page session, not one per metric, to reduce beacon overhead.
+- Attribution payload: when INP is bad, the attribution object names the event target, the handler script, and the blocking time.
 
-Check: the rum endpoint receives entries with `attribution` populated. The site's RUM dashboard ranks pages by p75 INP and lists top contributing elements per page.
+Check: the RUM endpoint receives entries with `attribution` populated; the dashboard ranks pages by p75 INP and lists top contributing elements per page.
 
 ### Sample rate
 
-Sample to a percentage that keeps cost manageable. For high-traffic sites: 10 to 25 percent is plenty for trend tracking. For low-traffic sites: 100 percent. The sample decision happens once per session (`Math.random() < 0.1`), stored in a session-scoped variable, applied to all metrics for that session.
+| Traffic | Sample rate |
+|---------|-------------|
+| High-traffic | 10 to 25 percent (plenty for trend tracking) |
+| Low-traffic | 100 percent |
 
-Check: sample rate is documented. Beacon volume per day is tracked as a cost line item. Sample rate is reviewed when traffic grows by more than 5x.
+The sample decision happens once per session (`Math.random() < 0.1`), stored in a session-scoped variable, applied to all metrics for that session.
+
+Check: sample rate is documented; beacon volume per day is tracked as a cost line item; sample rate is reviewed when traffic grows by more than 5x.
 
 ## INP Field Attribution Recipe
 
-INP regressions in the lab are often invisible. INP regressions in the field are the leading score-dropped cause for 2024+ Core Web Vitals. Attribution is the only way to fix what you cannot reproduce.
-
-### The two observers
+Field INP regressions are often invisible in the lab and are the leading score-dropped cause for 2024+ Core Web Vitals. Use two `PerformanceObserver`s: an `event` observer with `durationThreshold: 200` and a `long-animation-frame` observer with `durationThreshold: 50`.
 
 ```js
 const slowEvents = new PerformanceObserver((list) => {
@@ -212,24 +204,20 @@ const loaf = new PerformanceObserver((list) => {
 loaf.observe({ type: 'long-animation-frame', durationThreshold: 50 });
 ```
 
-The `event` observer reports every event whose total duration crossed your INP threshold. The `long-animation-frame` observer (LoAF, Chrome 123+) reports every animation frame longer than 50ms with the actual script attribution: which script, which function, how much time was spent forcing layout. Together these pin down the cause of any field-INP issue.
+The `event` observer skips entries with `entry.duration < 200` (200ms). The `long-animation-frame` observer (LoAF, Chrome 123+) skips entries with `entry.blockingDuration < 50` and reports every animation frame longer than 50ms with script attribution.
 
-### Mapping field INP to root cause
+Mapping field INP to root cause:
 
-The attribution sequence:
+- The metrics library reports INP value, rating, and the slow event entry (target, handler script).
+- The LoAF observer, firing around the same time, names the scripts that ran in the blocking frame.
+- Cross-reference by timestamp: the slow event plus the LoAF entries in the same animation frame are the same incident.
+- `scripts[].sourceURL` and `scripts[].sourceFunctionName` give the file and function, resolved to original code via uploaded source maps.
 
-1. Web-vitals reports INP value, rating, and the slow event entry (target, handler script).
-2. The LoAF observer, fired around the same time, names the scripts that ran in the blocking frame.
-3. Cross-reference by timestamp: the slow event plus the LoAF entries in the same animation frame are the same incident.
-4. The `scripts[].sourceURL` and `scripts[].sourceFunctionName` give the file and function name. With source maps uploaded (see above), the dashboard resolves to original code.
-
-Check: the dashboard, queried with "show me all field INP entries above 500ms in the last week", returns a ranked list grouped by `attribution.eventTarget` plus `scripts[].sourceFunctionName`. The top entries are actionable: a specific handler in a specific file.
+Check: the dashboard, queried with "show me all field INP entries above 500ms in the last week", returns a ranked list grouped by `attribution.eventTarget` plus `scripts[].sourceFunctionName`, with actionable top entries.
 
 ## Reporting API
 
-The Reporting API standardises browser-to-server delivery of CSP violations, deprecation warnings, intervention reports, and network errors. It runs in parallel to your error tracker and catches things JS cannot see.
-
-### Configuring the endpoint
+The Reporting API standardises browser-to-server delivery of CSP violations, deprecations, interventions, and network errors. It runs in parallel to the error tracker and catches things JS cannot see. The `Reporting-Endpoints` header (replacing the older `Report-To` header from 2024 onward) names destinations; CSP, NEL, Document-Policy, and Permissions-Policy violations each route to a named endpoint.
 
 ```text
 Reporting-Endpoints: default="https://reports.your-domain.example/", csp-endpoint="https://csp.your-domain.example/"
@@ -238,79 +226,63 @@ Document-Policy: ...; report-to=default
 NEL: {"report_to":"default","max_age":604800}
 ```
 
-The `Reporting-Endpoints` header (replacing the older `Report-To` header from 2024 onward) names the destinations. CSP, NEL (Network Error Logging), Document-Policy, and Permissions-Policy violations each route to one of the named endpoints.
+Reports arrive as POSTed JSON arrays, content-type `application/reports+json`. Each report has `type`, `url`, `user_agent`, `body`, and a timestamp.
 
-### What the endpoint receives
+| Category | Trigger | Body fields |
+|----------|---------|-------------|
+| csp-violation | a blocked load or inline execution | `blocked-uri`, `effective-directive`, `original-policy` |
+| deprecation | a feature scheduled for removal | deprecation id, message, source |
+| intervention | a feature the browser disabled (autoplay, slow script) | intervention id |
+| network-error | a failed resource load (DNS failure, TLS error, HTTP error) | protocol, method, status code |
 
-Reports arrive as POSTed JSON arrays, content-type `application/reports+json`. Each report has `type`, `url`, `user_agent`, `body`, and a timestamp. Categories:
+Check: endpoints receive reports within minutes of a deploy violating an unrolled-out policy; the CSP report stream is monitored during rollout and goes silent before promotion to enforcing.
 
-1. **csp-violation.** A blocked load or inline execution. Body contains `blocked-uri`, `effective-directive`, `original-policy`.
-2. **deprecation.** A feature scheduled for removal. Body contains the deprecation id, message, and source.
-3. **intervention.** A feature the browser disabled (e.g., autoplay, slow script). Body contains the intervention id.
-4. **network-error.** A failed resource load (DNS failure, TLS error, HTTP error). Body contains protocol, method, status code.
-
-Check: endpoints receive reports within minutes of a deploy that violates an unrolled-out policy. CSP report stream is monitored during a CSP rollout and goes silent before promotion to enforcing.
-
-### Browser support
-
-Chromium and Edge ship the full API. Firefox supports CSP reporting and a subset of NEL. Safari ships CSP reporting through the older `report-uri` directive (keep it alongside `report-to` for coverage).
+Browser support: Chromium and Edge ship the full API; Firefox supports CSP reporting and a subset of NEL; Safari ships CSP reporting through the older `report-uri` directive, so keep `report-uri` alongside `report-to` for coverage.
 
 ## CrUX and PageSpeed Insights
 
-The Chrome User Experience Report (CrUX) is Google's public dataset of real-user performance from Chrome users with opt-in field data sync. CrUX is the data Google uses for the Core Web Vitals ranking signal. The PageSpeed Insights API exposes it per origin and per URL.
-
-### Origin-level p75 over 28 days
+The Chrome User Experience Report (CrUX) is the public field dataset used for the Core Web Vitals ranking signal; the PageSpeed Insights (PSI) API exposes it per origin and per URL.
 
 ```bash
 curl -s "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://your-domain.example&strategy=mobile&key=YOUR_KEY" \
   | jq '.loadingExperience.metrics'
 ```
 
-Returns p75 LCP, INP, CLS, FCP, TTFB for the origin (or the URL if there is enough traffic). The window is rolling 28 days. The categories are `FAST`, `AVERAGE`, `SLOW`.
+This returns p75 LCP, INP, CLS, FCP, TTFB over a rolling 28-day window. Each metric is categorised `FAST`, `AVERAGE`, or `SLOW`.
 
-### Gating CI on a regression
+Gate: run the PSI query on every deploy and fail the deploy if any metric crosses from `FAST` to `AVERAGE` or worse, or if p75 INP grows by more than 50ms week-over-week.
 
-Run the PSI query on every deploy. Compare to a baseline (the previous deploy's values, or a 28-day-old snapshot). Fail the deploy if any metric crosses from `FAST` to `AVERAGE` or worse, or if p75 INP grows by more than 50ms week-over-week.
+Check: CI has a "perf budget" job that pulls CrUX and asserts the budget; the budget is documented per route in pre-launch.md evidence; regression alerts go to the on-call rotation.
 
-Check: CI has a "perf budget" job that pulls CrUX and asserts the budget. The budget is documented per route in `pre-launch.md` evidence. Regression alerts go to the on-call rotation.
-
-### CrUX limitations
-
-CrUX requires opt-in Chrome users. Low-traffic origins return `null`. Authenticated routes (behind login) never appear. For these, RUM is the only signal; CrUX cannot help.
+Limitations: CrUX requires opt-in Chrome users, low-traffic origins return `null`, and authenticated routes behind login never appear, so RUM is the only signal for these.
 
 ## Session Replay Tradeoffs
 
-Session replay (Sentry Replay, FullStory, LogRocket, Hotjar, PostHog) records the DOM, the network, and user input so engineers can scrub through a real session. Powerful for diagnosis, expensive in privacy surface.
+Session replay records the DOM, network, and input so engineers can scrub a real session. Powerful for diagnosis, expensive in privacy surface.
 
-### What it costs
+Costs:
 
-1. **Bytes.** Recording libraries are 30 to 100 KB gzipped on the wire. Some defer initialisation; even the deferred bundle is non-trivial.
-2. **CPU.** Continuous DOM diffing and serialisation. Modest, but measurable in INP if the page is already close to the threshold.
-3. **Storage.** Sessions are minutes of mutation logs. At 1 percent sampling on a million-session day, replay storage cost is real.
-4. **Privacy / GDPR surface.** The recording is personal data. Subject to right-of-access, right-to-erasure, lawful-basis disclosure, data-processing agreements.
+- Bytes: recording libraries are 30 to 100 KB gzipped on the wire; even deferred-init bundles are non-trivial.
+- CPU: continuous DOM diffing and serialisation, modest but measurable in INP if the page is already close to the threshold.
+- Storage: minutes of mutation logs per session.
+- Privacy: recordings are personal data subject to right-of-access, right-to-erasure, lawful-basis disclosure, and data-processing agreements (GDPR surface).
 
-### PII redaction
+PII redaction (defaults are not safe enough):
 
-The library's defaults are not safe enough. Configure:
+- Default block: treat every input, textarea, contenteditable, and `[data-pii]` element as masked by default; opt in to capture only for demonstrably safe fields.
+- Network redaction: redact request and response bodies for endpoints that touch user data; keep headers minus Authorization and Cookie.
+- URL redaction: strip query strings containing tokens such as `?access_token=` and `?reset=`.
+- Console redaction: redact log lines matching known PII patterns (emails, credit-card-like, JWT-like).
 
-1. **Default block.** Treat every input, textarea, contenteditable, and `[data-pii]` element as masked by default. Opt in to capture for fields that are demonstrably safe.
-2. **Network redaction.** Redact request bodies and response bodies for endpoints that touch user data. Keep headers minus Authorization and Cookie.
-3. **URL redaction.** Strip query strings containing tokens (`?access_token=`, `?reset=`).
-4. **Console redaction.** Redact log lines that match known PII patterns (emails, credit-card-like, JWT-like).
+Check: a deliberate session with a fake email and fake card number is replayed with both fields as redacted placeholders; the vendor data processing agreement names the PII categories captured and the retention.
 
-Check: a deliberate session with a fake email and a fake card number is recorded and then replayed; both fields appear as redacted placeholders. The data processing agreement with the vendor names the PII categories captured and the retention.
-
-### Sample, do not capture everything
-
-Replay on 100 percent of error sessions and 1 percent of clean sessions. The first gives you reproductions of bug reports; the second gives a statistical sample of regular usage.
+Sample, do not capture everything: replay on 100 percent of error sessions and 1 percent of clean sessions.
 
 ## Alert Thresholds
 
-Observability without alerts is a museum exhibit. Set thresholds, page the on-call when they trip.
+Observability without alerts is a museum exhibit. Set thresholds, page on-call when they trip.
 
-### Page load failure rate
-
-The fraction of navigations that never reach a usable state (white screen, network failure, uncaught error in initial render).
+Page load failure rate (navigations that never reach a usable state):
 
 | Threshold | Action |
 |-----------|--------|
@@ -318,11 +290,9 @@ The fraction of navigations that never reach a usable state (white screen, netwo
 | 0.5% to 1% | Warning, investigate within a day |
 | > 1% | Page on-call, treat as incident |
 
-Measure: count navigations where `PerformanceNavigationTiming.loadEventEnd > 0` against total navigations. Or count distinct sessions with no successful page view against distinct sessions that started one.
+Measure: count navigations where `PerformanceNavigationTiming.loadEventEnd > 0` against total navigations, or distinct sessions with no successful page view against distinct sessions that started one.
 
-### JS error rate per session
-
-The fraction of sessions that emit at least one uncaught error or unhandled rejection.
+JS error rate per session (sessions emitting at least one uncaught error or unhandled rejection):
 
 | Threshold | Action |
 |-----------|--------|
@@ -330,37 +300,21 @@ The fraction of sessions that emit at least one uncaught error or unhandled reje
 | 1% to 3% | Warning, file an issue |
 | > 3% | Page on-call |
 
-### INP p75 vs CWV bar
+INP p75 vs CWV bar: the CWV bar for INP is 200ms; alert when origin p75 INP crosses 200ms (regression from passing) or grows by more than 20 percent week-over-week.
 
-CWV bar for INP is 200ms. Alert when origin p75 INP crosses 200ms (regression from passing) or grows by more than 20 percent week-over-week.
+CWV passing rate per route: group routes by template (home, product, checkout) and track the passing rate as the fraction of sessions where all three CWVs (LCP, INP, CLS) hit the "Good" threshold; a drop is the leading indicator of a deploy regression before CrUX picks it up.
 
-### CWV passing rate per route
-
-Group routes by template (home, product, checkout). For each, the passing rate is the fraction of sessions where all three CWVs (LCP, INP, CLS) hit the "Good" threshold. A drop in passing rate is the leading indicator of a deploy regression before CrUX picks it up.
-
-Check: alerts route to a paging system (PagerDuty, Opsgenie). Each alert has a runbook in `debug-recipes.md`. Alert fatigue is reviewed monthly.
+Check: alerts route to a paging system; each alert has a runbook in debug-recipes.md; alert fatigue is reviewed monthly.
 
 ## Synthetic Monitoring vs RUM
 
-Synthetic and RUM measure different things. A robust observability story uses both.
+Synthetic and RUM measure different things; a robust story uses both.
 
-### What synthetic catches
+Synthetic catches: availability (200 from a probe location), lab-Lighthouse performance under controlled conditions, regression of a critical user flow (login, checkout) under fixed browser and network, and third-party dependency outages.
 
-- Availability (the page returned 200 from a probe location).
-- Lab-Lighthouse performance under controlled conditions.
-- Regression of a critical user flow (login, checkout) under a fixed browser, fixed network.
-- Third-party dependency outages (your CDN is down before any user reports it).
+RUM catches: real-user device distribution (slow Android on 3G), field-INP regressions invisible in the lab, regional performance variance, and real-user error rates (a widget crashing only on iOS Safari 17.2).
 
-Tools: Checkly, Pingdom, New Relic Synthetics, Datadog Synthetics, custom Lighthouse-CI runs against a staging URL.
-
-### What RUM catches
-
-- Real-user device distribution (the long tail of slow Android devices on 3G).
-- Field-INP regressions invisible in the lab.
-- Regional performance variance (your CDN's PoP placement vs your user distribution).
-- Real-user error rates (the third-party widget that crashes only on iOS Safari 17.2).
-
-### The split
+The split:
 
 | Question | Use |
 |----------|-----|
@@ -371,13 +325,11 @@ Tools: Checkly, Pingdom, New Relic Synthetics, Datadog Synthetics, custom Lighth
 | What is the field INP distribution on the checkout page? | RUM |
 | Did the staging deploy break the login flow? | Synthetic |
 
-Run both. The cost of synthetic is fixed per probe; the cost of RUM is proportional to traffic. Budget accordingly.
+Synthetic cost is fixed per probe; RUM cost is proportional to traffic. Check: synthetic checks run every 5 minutes against the top three routes from at least three geographies; RUM captures every CWV and every error from at least 10 percent of sessions; both feed the same on-call dashboard.
 
-Check: synthetic checks run every 5 minutes against the top three routes from at least three geographies. RUM captures every CWV and every error from at least 10 percent of sessions. Both feed the same on-call dashboard.
+## See Also
 
-## See also
-
-- [performance.md](performance.md) for the lab-side instrumentation (DevTools Performance, Lighthouse, perf budgets) that pairs with field RUM
-- [lighthouse.md](lighthouse.md) for `valid-source-maps`, `errors-in-console`, and the audit rows that map to observability hygiene
-- [debug-recipes.md](debug-recipes.md) for the named diagnosis loops that consume the observability data
+- [performance.md](performance.md) for lab-side instrumentation (DevTools Performance, Lighthouse, perf budgets) that pairs with field RUM
+- [lighthouse.md](lighthouse.md) for `valid-source-maps`, `errors-in-console`, and audit rows that map to observability hygiene
+- [debug-recipes.md](debug-recipes.md) for the named diagnosis loops that consume observability data
 - [pre-launch.md](pre-launch.md) for the observability gate in the evidence manifest

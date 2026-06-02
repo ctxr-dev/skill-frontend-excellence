@@ -1,109 +1,98 @@
 ---
 title: Multi-Page Audit and Polish Workflow
-purpose: Procedural playbook for auditing an existing multi-page site against a reference and polishing it to a consistent visual bar across every route.
+purpose: Procedural playbook for auditing an existing multi-page site against a reference and polishing every route to one consistent visual bar. The rendered browser is the source of truth.
 load-when:
   task-keywords: [audit, route, sweep, screenshot, baseline, capture, polish, drift, widget, component, regression]
   symptoms: [score dropped, viewport overflow, horizontal scroll, broken on Safari, broken on Firefox, dark mode broken]
 prereq: SKILL.md
 related: [components.md, defects.md, pre-launch.md, design.md]
-size: ~470 lines
+size: ~444 lines
 ---
 
 # Multi-Page Audit and Polish Workflow
 
-The procedural playbook for auditing an existing multi-page site against a reference and polishing it to that level of discipline. Use this when the work is not building a new page from scratch but bringing an existing surface to a consistent visual bar across every route.
+Use this when the work is not building a new page but bringing an existing surface to a consistent visual bar across every route. The greenfield frame (Frame, Plan, Build, Verify in SKILL.md) is for new work; the 19 phases below are for audit and polish. Run them in order; each phase has a clear input and a clear output.
 
-The strategic four-phase workflow in the entry SKILL.md (Frame, Plan, Build, Verify) is the right frame for greenfield work. The 19 phases below are the right frame for audit and polish work. Run them in order; each phase has a clear input and a clear output.
+Vague goal restatement: when a request is a vague quality goal ("best SEO", "make it 100 everywhere"), restate it as the explicit per-category, per-route numeric bars and the measurement method BEFORE acting.
 
 ## Core Principle
 
-Treat the rendered browser as the source of truth. Do not judge visual quality from code alone. Capture screenshots, inspect them, compare against the reference, patch the smallest set of templates, styles, or assets needed, and re-capture until the visible result is clean at every requested viewport.
-
-The goal is not to copy another brand pixel-for-pixel unless explicitly requested. The goal is to match the reference site's level of discipline: proportion, density, hierarchy, alignment, typography, spacing, interaction behavior, responsive refinement, and absence of visual defects.
-
-Equally important: repeated widgets must be standardized. If the same kind of thing appears on multiple pages, such as a hero, feature card, pricing card, integration tile, CTA band, testimonial, FAQ, footer column, media row, badge, form, or navigation dropdown, it should follow one canonical visual and content contract unless there is a deliberate, documented variant. Polishing each instance separately is not enough.
+- Treat the rendered browser as the source of truth. Do not judge visual quality from code alone. Capture, inspect, compare against reference, patch the smallest set of templates/styles/assets, re-capture until clean at every requested viewport.
+- Goal is to match the reference site's level of discipline (proportion, density, hierarchy, alignment, typography, spacing, interaction, responsive refinement, absence of defects), not copy another brand pixel-for-pixel unless explicitly requested.
+- Repeated widgets (hero, feature card, pricing card, integration tile, CTA band, testimonial, FAQ, footer column, media row, badge, form, nav dropdown) must follow one canonical visual and content contract unless there is a deliberate documented variant. Polishing each instance separately is not enough.
 
 ## Operating Rules
 
-These rules apply to every phase below. Treat any violation as a defect.
+Apply to every phase below. Treat any violation as a defect.
 
-1. Identify the target URL, project root, build system, source directories, and reference URL or screenshots before making changes.
-2. Capture a baseline before editing when visual polish is the task.
-3. Capture at least one desktop viewport and one mobile viewport. Use `1440x900` and `375x812` unless the user specifies otherwise. See [responsive.md](responsive.md) for the canonical breakpoints table.
-4. Audit route-by-route. Include generated pages, legal pages, pricing pages, integration pages, 404 pages, and programmatic content routes if they are linked or published.
-5. Audit component-by-component across routes. Build a widget inventory and compare every repeated widget type across pages before finalizing. See [components.md](components.md).
-6. Extract repeated markup into reusable components, partials, includes, or framework-native primitives when the local stack supports it. If extraction is not feasible, normalize the markup and document why duplication remains.
-7. Compare real screenshots against the reference. Vague statements such as "looks better" are not evidence.
-8. Fix root component causes when the same issue appears across pages: navigation, footer, cards, buttons, typography, spacing tokens, image rules, or grid primitives.
-9. Re-render and re-screenshot after each meaningful group of fixes.
-10. Preserve the site's content, brand intent, and information architecture unless the user asks for copy or structure changes.
-11. Keep changes scoped. Do not rewrite the entire design system when a token, component, template, or layout rule fixes the defect.
-12. Run available validation commands before final delivery: build, lint, stylelint, tests, visual capture, accessibility checks, Lighthouse, and the geometry sweep in [defects.md](defects.md).
-13. Never declare the pass complete while known visible issues remain.
+- Identify the target URL, project root, build system, source directories, and reference URL or screenshots before making changes.
+- Capture a baseline before editing when visual polish is the task.
+- Capture at least one desktop and one mobile viewport, using `1440x900` and `375x812` unless the user specifies otherwise. Breakpoints table: see responsive.md.
+- Audit route-by-route, including generated pages, legal pages, pricing pages, integration pages, 404 pages, and programmatic content routes if linked or published.
+- Audit component-by-component across routes: build a widget inventory and compare every repeated widget type across pages before finalizing. See components.md.
+- Extract repeated markup into reusable components/partials/includes/framework primitives when the stack supports it; if extraction is not feasible, normalize the markup and document why duplication remains.
+- Compare real screenshots against the reference. "Looks better" is not evidence.
+- Fix root component causes when an issue repeats across pages: navigation, footer, cards, buttons, typography, spacing tokens, image rules, grid primitives.
+- Re-render and re-screenshot after each meaningful group of fixes.
+- Preserve content, brand intent, and information architecture unless the user asks for copy or structure changes.
+- Keep changes scoped; do not rewrite the entire design system when a token, component, template, or layout rule fixes the defect.
+- Run available validation before final delivery: build, lint, stylelint, tests, visual capture, accessibility checks, Lighthouse, and the geometry sweep in defects.md.
+- Never declare the pass complete while known visible issues remain.
 
-### Parallelizing an audit or fix pass across agents (optional)
-
-When the audit or the fixes are split across multiple automated agents:
+### Parallelizing across agents (optional)
 
 - Give each agent a DISJOINT set of files. Two agents editing the same file collide and overwrite each other.
-- Do the shared foundation first (shared components, tokens, shared data modules), serially, before fanning out page-level work that depends on it.
-- Verify centrally after all agents finish, with the programmatic sweeps and a rebuild. Per-agent self-reports are not the gate.
-- Trust but verify each report. An agent may read a file while another is mid-edit and report it "broken" when it is not, or flag a correct value as wrong. Re-read the file before acting on a surprising claim.
+- Do the shared foundation (shared components, tokens, shared data modules) first and serially, before fanning out page-level work that depends on it.
+- Verify centrally after all agents finish, with programmatic sweeps and a rebuild. Per-agent self-reports are not the gate.
+- Trust but verify each report; re-read a file before acting on a surprising claim (an agent may read a file mid-edit and report it broken when it is not).
 
 ## Phase 1: Discover Context
 
-Before capturing or editing, determine:
+Determine before capturing or editing:
 
 - Project root and package manager.
-- Build system and templating mechanism (whatever the project uses; the workflow does not depend on a specific framework).
-- Source locations for templates, components, global CSS, component CSS, JavaScript, image assets, fonts, config, and generated output.
+- Build system and templating mechanism (framework-agnostic; the workflow does not depend on a specific framework).
+- Source locations for templates, components, global CSS, component CSS, JavaScript, image assets, fonts, config, generated output.
 - Local dev URL and whether a server is already running.
 - Reference source: live URL, screenshot folder, design export, previous production site, or written design standard.
 - Route scope: entire site, root only, a section, or a list of specific routes.
 
-Read the project's existing scripts before inventing commands. If a dev server is needed and none is running, start it. If the standard port is occupied, use the existing server when it matches the project; otherwise pick another port.
+Read the project's existing scripts before inventing commands. If a dev server is needed and none is running, start it; if the standard port is occupied, use the existing server when it matches the project, otherwise pick another port.
 
 ## Phase 2: Inventory Routes
 
-Build a route list from multiple sources:
+Build a route list from: linked anchors on homepage/primary nav; static-build output directories; sitemap files; route manifests/content data/collection templates/programmatic page data; known required pages from the user.
 
-- Linked anchors on the homepage and primary navigation.
-- Static-build output directories for routes the user can land on.
-- Sitemap files.
-- Route manifests, content data files, collection templates, or programmatic page data.
-- Known required pages from the user.
-
-Exclude only routes that are intentionally external, authenticated admin flows, logout or delete actions, file or mail or tel links, or fragments of pages already covered.
+Exclude only routes that are intentionally external, authenticated admin flows, logout/delete actions, file/mail/tel links, or fragments of pages already covered.
 
 If route generation is broken, fix missing published pages before polishing the rest of the site. A polished 404 for a page that should exist is still a failure.
 
 ### Diff-driven re-audit scope
 
-On a re-audit (not a first audit), scope the route list to what the diff actually touched. Re-running every route on every PR wastes time; missing a route that the diff DID touch ships a regression.
+On a re-audit (not a first audit), scope the route list to what the diff touched. Re-running every route every PR wastes time; missing a route the diff DID touch ships a regression.
 
 1. Get the diff: `git diff --name-only main...HEAD` (or the appropriate base).
 2. Filter to source-of-truth files: templates, components, global CSS, design tokens, layout primitives, route data, content collections. Exclude tests, fixtures, generated output, lockfiles, docs.
 3. Apply blast-radius rules:
-   - A page-level template change scopes to that page only.
-   - A shared widget edit scopes to EVERY route that imports the widget (transitively). Re-capture every route that imports the widget; do not trust "this page does not use it" without re-checking the import graph.
-   - A global token or layout primitive (a shared spacing scale, a color, a layout shell) scopes to every route.
-   - A route-data change (sitemap, route manifest, collection schema) scopes to every generated page.
-4. Resolve the import graph from the build tool's module graph (or a project script that emits one), not from grep. A grep against component names misses re-exports and aliases.
-5. The resulting re-audit set is the intersection of (routes in scope) with (routes the diff touched, transitively). Capture and sweep every route in the set at both viewports.
+   - Page-level template change scopes to that page only.
+   - Shared widget edit scopes to EVERY route that imports the widget transitively. Re-capture every importing route; do not trust "this page does not use it" without re-checking the import graph.
+   - Global token or layout primitive (shared spacing scale, color, layout shell) scopes to every route.
+   - Route-data change (sitemap, route manifest, collection schema) scopes to every generated page.
+4. Resolve the import graph from the build tool's module graph (or a project script that emits one), not from grep; grep against component names misses re-exports and aliases.
+5. Re-audit set is the intersection of (routes in scope) with (routes the diff touched transitively). Capture and sweep every route in the set at both viewports.
 
 ## Phase 3: Inventory Repeated Widgets
 
-Before editing styles, build a cross-page widget inventory. The inventory is mandatory for any multi-page polish.
+Before editing styles, build a cross-page widget inventory. Mandatory for any multi-page polish. The 11 widget families and the inventory record format live in components.md. Per family record: routes where it appears, source that renders it, required/optional content fields, allowed variants, canonical visual contract, intentional-vs-accidental deviations.
 
-The 11 widget families and the inventory record format live in [components.md](components.md). For each family, record routes where it appears, the source that renders it, required and optional content fields, allowed variants, the canonical visual contract, and which deviations are intentional versus accidental.
-
-Use this inventory to decide whether to extract, extend, or normalize. The extraction rule (extract at three or more duplicates, or at two with clear future reuse, or any visible drift) is the same one in [components.md](components.md). Do not keep two visually different implementations of the same widget type unless they have distinct semantic purposes and named variants.
+- Extraction rule (same as components.md): extract at three or more duplicates, or at two with clear future reuse, or any visible drift.
+- Do not keep two visually different implementations of the same widget type unless they have distinct semantic purposes and named variants.
 
 ## Phase 4: Capture Baseline
 
-Capture every route in scope at both audit viewports before editing. Store screenshots in a timestamped audit directory. Capture both viewport screenshots and full-page screenshots when useful.
+Capture every in-scope route at both audit viewports before editing. Store in a timestamped audit directory. Capture both viewport and full-page screenshots when useful.
 
-Use consistent file names so before-and-after comparison is mechanical:
+Filename convention (load-bearing for mechanical before/after comparison):
 
 - `<route>_desktop.png`
 - `<route>_desktop_full.png`
@@ -113,9 +102,7 @@ Use consistent file names so before-and-after comparison is mechanical:
 - `reference_mobile.png`
 - `report.json`
 
-Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent). The script below uses only standard browser APIs and standard Node modules; adapt the route list and the output directory for the project under audit.
-
-Before running it, install the browser-automation library the script imports (for the example below: `npm install --save-dev puppeteer`). Save the script as `capture.cjs` and invoke it with `node capture.cjs <output-dir>` (the output directory defaults to `visual-audit/`). If the project already uses Playwright or another driver, port the loop body; the screenshot file naming convention is the load-bearing part, not the driver.
+Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent). If the project uses another driver, port the loop body; the file naming convention is load-bearing, not the driver. Install the automation library (for the example below: `npm install --save-dev puppeteer`), save as `capture.cjs`, invoke with `node capture.cjs <output-dir>` (defaults to `visual-audit/`).
 
 ```js
 const fs = require("fs");
@@ -166,35 +153,33 @@ const safeName = (route) =>
 })();
 ```
 
-Adapt the script rather than rewriting it. Add route discovery, contact sheets, interactive captures, and the geometry sweep from [defects.md](defects.md) as the task requires.
+Adapt the script rather than rewriting it. Add route discovery, contact sheets, interactive captures, and the geometry sweep from defects.md as the task requires.
 
 ### Authenticated and stateful route capture
 
-Logged-in routes, multi-step flows, and screens that depend on stored state (theme, locale, feature flags, cart contents) need a capture pattern that seeds the state before screenshotting. Public-only capture misses the bulk of any real product.
+Logged-in routes, multi-step flows, and screens that depend on stored state (theme, locale, feature flags, cart contents) need seeded state before screenshotting. Public-only capture misses the bulk of any real product.
 
-The pattern:
-
-1. Seed cookies, `localStorage`, and `sessionStorage` at browser launch, not via a UI flow per capture. The flow runs once to record state; every subsequent capture reuses it.
-2. Drive the multi-step flow in one capture session: navigate to login, submit credentials, wait for the post-login redirect, set any required state (select an org, accept terms, dismiss onboarding), THEN screenshot the target route.
-3. Snapshot the post-login storage with a headless driver's storage facility (e.g., Playwright's `storageState`, Puppeteer's `page.cookies()` plus `localStorage` dump) and reuse the snapshot across every authenticated capture. One login per audit, not one login per route.
-4. Refresh the snapshot when the auth schema changes or the session expires. Detect via an HTTP 401 on the first authenticated request; re-record and retry.
-5. Use a dedicated audit account (not a real user) with deterministic data: seed the database with known fixtures so the screenshots compare cleanly across runs.
-6. Tag each authenticated capture so the diff tool knows it depends on seeded state; a pixel diff against a fresh login on a different day will drift even when the UI did not change.
+- Seed cookies, `localStorage`, and `sessionStorage` at browser launch, not via a UI flow per capture. The flow runs once to record state; every subsequent capture reuses it.
+- Drive the multi-step flow in one capture session: navigate to login, submit credentials, wait for the post-login redirect, set required state (select org, accept terms, dismiss onboarding), THEN screenshot the target route.
+- Snapshot post-login storage with the driver's facility (Playwright `storageState`, Puppeteer `page.cookies()` plus `localStorage` dump) and reuse it across every authenticated capture: one login per audit, not one login per route.
+- Refresh the snapshot when the auth schema changes or the session expires; detect via an HTTP 401 on the first authenticated request, then re-record and retry.
+- Use a dedicated audit account (not a real user) with deterministic data; seed the database with known fixtures so screenshots compare cleanly across runs.
+- Tag each authenticated capture so the diff tool knows it depends on seeded state; a pixel diff against a fresh login on a different day drifts even when the UI did not change.
 
 ## Phase 5: Capture Reference
 
-Capture the reference target at the same viewport sizes used in Phase 4. If the reference is a live site, use cache-busted URLs and the same browser engine as the baseline. If the reference is a screenshot or design export, place the assets next to the local screenshots so side-by-side comparison is one open command away.
+Capture the reference at the same viewport sizes as Phase 4. If the reference is a live site, use cache-busted URLs and the same browser engine as the baseline. If it is a screenshot or design export, place assets next to local screenshots for one-command side-by-side comparison.
 
 When comparing to a reference:
 
 - Match polish level, not necessarily exact color or content.
-- Compare the first viewport first: navigation, hero, primary CTA, image treatment, first hint of next section.
-- Then compare section rhythm: density, vertical spacing, card grids, media-to-copy balance, and CTA placement.
-- Finally compare details: shadows, borders, radii, icon alignment, label treatment, focus states, hover states, mobile drawer behavior, footer density.
+- First viewport first: navigation, hero, primary CTA, image treatment, first hint of next section.
+- Then section rhythm: density, vertical spacing, card grids, media-to-copy balance, CTA placement.
+- Finally details: shadows, borders, radii, icon alignment, label treatment, focus states, hover states, mobile drawer behavior, footer density.
 
 ## Phase 6: Audit Each Route
 
-For every route and viewport, inspect every category below. Record findings as route plus viewport plus component plus what is wrong plus why it matters plus likely source plus screenshot plus fix status.
+For every route and viewport, record findings as: route + viewport + component + what is wrong + why it matters + likely source + screenshot + fix status.
 
 | Category | What to inspect |
 |----------|-----------------|
@@ -210,42 +195,40 @@ For every route and viewport, inspect every category below. Record findings as r
 | Footer | Layout balance, link columns, legal row, social icon spacing, hit area, mobile stacking |
 | Responsive behavior | No horizontal scroll, no clipping, no desktop layout on mobile, no text overflow, no oversized buttons or cards, no tiny tap targets |
 
-Also compare each widget against other instances of the same family. Do same-type cards have the same padding, radius, border, hover, min-height, CTA position, and typography? Does the same CTA mean the same thing and use the same label style? Do integration and logo tiles use one image size, one logo treatment, and one fallback? Do section headers use the same eyebrow, H2, subhead, width, and gap rules? Do hero variants have named purposes and shared internals? Are component variants explicit in code, or are they accidental class combinations?
+Compare each widget against other instances of its family: same padding/radius/border/hover/min-height/CTA position/typography; same CTA label style; one image/logo/fallback treatment for tiles; same eyebrow/H2/subhead/width/gap for section headers; named hero variants with shared internals; explicit (not accidental) component variants.
 
 ## Phase 7: Prioritize Fixes
 
-Fix in this order. Higher tiers always block lower tiers.
+Fix in tiered order; higher tiers always block lower tiers.
 
 1. Broken routes, 404s, missing generated pages, hard layout failures.
 2. Global shell defects: header, navigation, footer, body overflow, typography tokens, color tokens.
 3. Cross-page widget drift: same widget type implemented differently across pages without a named variant.
 4. Cross-page component defects: cards, buttons, pricing, integration tiles, form controls, media blocks.
-5. Page-specific hierarchy and section density issues; interaction and accessibility issues; asset and performance polish; minor copy clarity where misleading product claims or repeated template text needs work.
+5. Page-specific hierarchy/density; interaction and accessibility; asset/performance polish; minor copy clarity.
 
-Prefer global fixes when a defect repeats. Prefer page-level fixes when the defect is truly contextual.
+Prefer global fixes when a defect repeats; prefer page-level fixes when the defect is truly contextual.
 
 ## Phase 8: Patch With Component Discipline
 
-When repeated widgets drift, fix the component system before tuning page-specific CSS. The full extraction sequence and the component contract checklist live in [components.md](components.md). Walk that file before editing.
-
-The summary: choose a canonical contract, name the widget and variants clearly, move repeated markup into the project's component mechanism, pass content as explicit fields, make variants explicit, centralize CSS, re-render every route, and compare instances side-by-side at both viewports. Anti-patterns to avoid (copy-paste tweaking, near-duplicate components, one-off CSS for drift, overly generic components requiring per-call-site overrides) also live in [components.md](components.md).
+When repeated widgets drift, fix the component system before tuning page-specific CSS. Full extraction sequence, component contract checklist, and anti-patterns (copy-paste tweaking, near-duplicate components, one-off CSS for drift, overly generic components needing per-call-site overrides) live in components.md. Summary: choose a canonical contract, name widget and variants, move markup into the component mechanism, pass content as explicit fields, make variants explicit, centralize CSS, re-render every route, compare instances at both viewports.
 
 ## Phase 9: Patch With Design Discipline
 
-Use existing design primitives before adding new ones. Patch CSS, templates, and components conservatively.
+Use existing design primitives before adding new ones. Patch CSS, templates, and components conservatively. Token detail: design.md. Layout primitives: responsive.md. Contrast: accessibility.md. Image strategy: performance.md.
 
-- Normalize tokens first: spacing, color, border, radius, shadow, type scale. Token detail lives in [design.md](design.md).
+- Normalize tokens first: spacing, color, border, radius, shadow, type scale.
 - Use stable dimensions for repeated UI: `min-height`, `aspect-ratio`, grid tracks, `align-items: stretch`, fixed icon boxes.
-- Avoid arbitrary one-off margins. Use local precedent or none.
+- Avoid arbitrary one-off margins; use local precedent or none.
 - Use `gap` for internal spacing instead of stacked margins where possible.
-- Use `max-width` and responsive constraints for readable line lengths. Layout primitive detail lives in [responsive.md](responsive.md).
-- Use full-card anchors when a card visually behaves as a link. Do not nest anchors.
+- Use `max-width` and responsive constraints for readable line lengths.
+- Use full-card anchors when a card visually behaves as a link; do not nest anchors.
 - Keep CTA hover transforms from stacking with card hover transforms.
-- Use `:focus-visible` rings that are clearly visible and consistent. Contrast detail lives in [accessibility.md](accessibility.md).
-- Avoid hiding visible text behind mismatched `aria-label`. Visible text is the accessible name.
+- Use `:focus-visible` rings that are clearly visible and consistent.
+- Avoid hiding visible text behind a mismatched `aria-label`; visible text is the accessible name.
 - Make hover and focus states visually related so a keyboard user gets the same clarity as a pointer user.
 - Use `srcset` and `sizes` for recurring large images.
-- Use `loading="eager"` and `fetchpriority="high"` only on the hero LCP image. Use `loading="lazy"` and `decoding="async"` for below-the-fold imagery. Image strategy detail lives in [performance.md](performance.md).
+- Use `loading="eager"` and `fetchpriority="high"` only on the hero LCP image; use `loading="lazy"` and `decoding="async"` for below-the-fold imagery.
 
 ## Phase 10: Verify After Every Fix Group
 
@@ -258,51 +241,42 @@ After a meaningful fix group:
 5. Confirm no regression on shared components.
 6. If a reusable widget changed, capture every route where the widget appears, not only the route where the defect was first noticed.
 
-Do not wait until the end to discover that a global CSS fix broke mobile.
+Do not wait until the end to discover a global CSS fix broke mobile.
 
 ### Side-by-side diff tooling
 
-Eyeballing two screenshots in two browser tabs misses the small pixel shifts that compound. Pick the tool that matches the cadence:
+Eyeballing two tabs misses small pixel shifts that compound. Pick the tool by cadence:
 
 | Tool | Strength | Use when |
 |------|----------|----------|
-| pixelmatch | Raw pixel diff, single dependency, scriptable | One-off baseline vs after comparison; a quick local sanity check; a custom CI gate where the diff threshold is the only signal |
-| reg-suit | Git-aware visual regression, stores baselines per branch, reports diff to PR | The team wants a history of baselines tied to commits; a self-hosted alternative to Chromatic |
-| Playwright's `toMatchSnapshot` | Built into the test runner, lives next to the rest of the suite | A CI gate runs as part of an existing Playwright test job; one toolchain, one configuration; tolerable for small surfaces |
-| Chromatic | Hosted, integrates with a component playground, design-review UI for non-engineers | A design system with many stakeholders; review workflow needs comments per visual change; budget allows a paid hosted service |
+| pixelmatch | Raw pixel diff, single dependency, scriptable | One-off baseline vs after; quick local sanity check; custom CI gate where the diff threshold is the only signal |
+| reg-suit | Git-aware visual regression, stores baselines per branch, reports diff to PR | Team wants a history of baselines tied to commits; self-hosted alternative to a hosted service |
+| Playwright `toMatchSnapshot` | Built into the test runner, lives next to the suite | CI gate runs as part of an existing Playwright job; one toolchain; tolerable for small surfaces |
+| Chromatic | Hosted, integrates with a component playground, design-review UI for non-engineers | Design system with many stakeholders needing per-change comments; budget for a paid hosted service |
 
-The decision rule: a one-off diff -> pixelmatch; a CI gate alongside other tests -> Playwright `toMatchSnapshot`; a history of baselines with PR-level diff comments and no hosted service -> reg-suit; a design-system review surface for stakeholders -> Chromatic.
+Decision rule: one-off diff -> pixelmatch; CI gate alongside other tests -> Playwright `toMatchSnapshot`; history of baselines with PR-level diff comments and no hosted service -> reg-suit; design-system review surface for stakeholders -> Chromatic.
 
-Whichever tool: never approve a baseline on green CI alone. A human reviews the diff (the rendered comparison images, not just the percentages) before the baseline is promoted.
+Never approve a baseline on green CI alone. A human reviews the rendered comparison images (not just the percentages) before the baseline is promoted.
 
 ## Phase 11: Programmatic Geometry Checks
 
-Use browser automation to catch issues that screenshots miss: viewport bleed, hidden text overflow, sub-44 hit targets, duplicate arrows, dropdown miscentering, mobile drawer scroll-lock failures, focus invisibility.
+Use browser automation to catch what screenshots miss: viewport bleed, hidden text overflow, sub-44 hit targets, duplicate arrows, dropdown miscentering, mobile drawer scroll-lock failures, focus invisibility.
 
-The canonical 9-check sweep, the JS snippet that runs it, and the per-check thresholds live in [defects.md](defects.md). Run it on every audited route at both capture viewports. A run is clean when every check returns zero issues.
+The canonical 9-check geometry sweep, its JS snippet, and per-check thresholds live in defects.md. Run on every audited route at both capture viewports; a run is clean when every check returns zero issues.
 
-Filter false positives only when you can explain them, such as hidden off-canvas content or intentionally overflowing dropdown internals that do not affect the page viewport. Document the filter so the next run does not re-discover it.
+Filter false positives only when you can explain them (hidden off-canvas content, intentionally overflowing dropdown internals that do not affect the page viewport) and document the filter so the next run does not re-discover it.
 
-Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See [defects.md](defects.md) for both. A route is not signed off until both return clean.
+Run BOTH sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over built HTML). See defects.md. A route is not signed off until both return clean.
 
 ## Phase 12: Component Drift Checks
 
-Use browser automation to compare same-family widgets across pages. This does not replace visual judgment, but it catches drift early.
+Use the drift collector to compare same-family widgets across pages. Catches drift early; does not replace visual judgment. The snippet and property list (width, height, padding, radius, border, background, shadow, typography, CTA position, image metrics) live in components.md. Run on every route in scope; compare each family across pages.
 
-The drift collector snippet and the property list (width, height, padding, radius, border, background, shadow, typography, CTA position, image metrics) live in [components.md](components.md). Run it on every route in scope. Compare the result for each family across pages.
-
-Flag any difference that is not explained by a named variant. A family is drift-free when every same-variant instance produces the same metrics within rounding tolerance.
+Flag any difference not explained by a named variant. A family is drift-free when every same-variant instance produces the same metrics within rounding tolerance.
 
 ## Phase 13: Interaction QA
 
-Capture explicit interaction screenshots and verify behavior:
-
-- Desktop dropdown open.
-- Mobile menu open.
-- Hovered card or button.
-- Focus-visible state on major controls.
-- Pricing card hover or focus if cards animate.
-- Modal, drawer, accordion, tabs, carousel, or form validation states if present.
+Capture explicit interaction screenshots: desktop dropdown open, mobile menu open, hovered card or button, focus-visible state on major controls, pricing card hover/focus if cards animate, and modal/drawer/accordion/tabs/carousel/form-validation states if present.
 
 Behavioral checks:
 
@@ -316,17 +290,17 @@ Behavioral checks:
 - Focus ring is not clipped.
 - Interactive element accessible names match visible labels.
 
-State coverage detail (empty, loading, success, error, partial, disabled, read-only, stale, offline, unauthorized, limit-reached, initial, done) lives in [ui-ux.md](ui-ux.md).
+State coverage (empty, loading, success, error, partial, disabled, read-only, stale, offline, unauthorized, limit-reached, initial, done): see ui-ux.md.
 
 ## Phase 14: Accessibility Validation
 
-Use Lighthouse, axe, or equivalent when available. Treat these as baseline checks, not replacements for human visual inspection. The full WCAG 2.2 AA framework, ARIA rules, contrast targets, keyboard patterns, screen reader checks, and focus management live in [accessibility.md](accessibility.md).
+Use Lighthouse, axe, or equivalent as baseline checks, not replacements for human visual inspection. Full WCAG 2.2 AA framework, ARIA, contrast targets, keyboard patterns, screen reader checks, focus management: see accessibility.md.
 
-The minimum required basics specific to multi-page polish:
+Minimum basics for multi-page polish:
 
 - `<html lang>` exists and is valid on every route.
 - Exactly one primary `<main>` per route.
-- Logical heading order; one H1 per route; sequential H2 to H3.
+- Logical heading order: one H1 per route, sequential H2 to H3.
 - Links and buttons have accessible names.
 - Form controls have labels.
 - Visible labels match accessible names.
@@ -340,7 +314,7 @@ If a visual fix creates an accessibility problem, the visual fix is incomplete.
 
 ## Phase 15: Lighthouse and Performance Polish
 
-Run Lighthouse when the project has it set up or when the user asks for production polish. Fix failing assertions. Treat warnings as useful triage but do not over-optimize at the cost of design unless the user asks. Lighthouse setup, scoring weights, and audit-by-audit fixes live in [lighthouse.md](lighthouse.md). Performance mechanics and asset strategy live in [performance.md](performance.md).
+Run Lighthouse when the project has it set up or the user asks for production polish. Fix failing assertions; treat warnings as triage without over-optimizing at the cost of design unless asked. Setup, scoring weights, audit-by-audit fixes: lighthouse.md. Performance mechanics and asset strategy: performance.md.
 
 Common visual-performance fixes that surface in audit work:
 
@@ -348,13 +322,13 @@ Common visual-performance fixes that surface in audit work:
 - Use correct intrinsic `width` and `height` on every image to prevent layout shift.
 - Preload or prioritize only the actual LCP image.
 - Avoid loading offscreen imagery eagerly.
-- Remove giant decorative images that are visually indistinguishable from smaller assets.
-- Keep webfont usage intentional. Cap to two families and four weights.
+- Remove giant decorative images visually indistinguishable from smaller assets.
+- Keep webfont usage intentional: cap to two families and four weights.
 - Avoid expensive shadows and filters on large scrolling surfaces if they cause jank.
 
 ## Phase 16: Reference-Level Design Heuristics
 
-Use these tests when comparing the audited site to the reference. Each test is a yes-or-no judgment supported by the captured screenshots. The same list lives in [design.md](design.md) "Reference Comparison Heuristics" for use outside this audit workflow; the two copies are intentionally identical so each file is self-contained for its reader's mode.
+Yes-or-no judgments supported by the captured screenshots when comparing the audited site to the reference. The same 16 live in design.md "Reference Comparison Heuristics"; the two copies are intentionally identical so each file is self-contained for its reader's mode.
 
 1. First viewport has a clear hierarchy and does not feel accidental.
 2. The brand or product is visible immediately when relevant.
@@ -373,24 +347,24 @@ Use these tests when comparing the audited site to the reference. Each test is a
 15. Same-family widgets look like members of one system across pages.
 16. Variants are recognizably intentional, not accidental drift.
 
-A site at reference level passes every test. A site at "fine" level fails three or more.
+A site at reference level passes every test; a site at "fine" level fails three or more.
 
 ## Phase 17: Common Defects and Fixes
 
-The 29-row symptom-to-fix lookup table lives in [defects.md](defects.md). Use it whenever a defect surfaces during Phase 6 or Phase 13. Apply the standard fix at the right layer (component, page, or design token), then re-run the geometry sweep on the affected route.
+The 29-row symptom-to-fix lookup table lives in defects.md. Use it whenever a defect surfaces during Phase 6 or Phase 13. Apply the standard fix at the right layer (component, page, or design token), then re-run the geometry sweep on the affected route.
 
 ## Phase 18: Deliverables
 
 Provide a concise final package:
 
 - Summary of main changes.
-- Per-page checklist with issues found, fixes applied, and screenshot references.
+- Per-page checklist: issues found, fixes applied, screenshot references.
 - Before-and-after screenshot paths for desktop and mobile.
 - Reference screenshot paths.
 - Interactive screenshot paths if menus, drawers, or cards were tested.
 - Validation commands and pass-or-fail results.
 - Remaining risks only if real issues remain.
-- Widget inventory and standardization notes: which repeated widgets were found, which were extracted or normalized, and which named variants remain.
+- Widget inventory and standardization notes: which repeated widgets were found, which were extracted or normalized, which named variants remain.
 
 Per-page checklist format:
 
@@ -421,12 +395,12 @@ Validation summary format:
 
 ## Phase 19: Final Acceptance Gate
 
-Before final delivery, confirm every item below. This is the authoritative gate for multi-page audit and polish work. The Self-Improvement section in the entry SKILL.md is the short version.
+Authoritative gate for multi-page audit and polish work (the Self-Improvement section in SKILL.md is the short version). Confirm every item:
 
 - Every in-scope route was captured at desktop (`1440x900`) and mobile (`375x812`).
 - Every route returns the expected HTTP status.
 - Repeated widget families have been inventoried and compared across pages.
-- Same-purpose widgets have been extracted into reusable components or partials, or normalized to one contract where extraction is not feasible.
+- Same-purpose widgets have been extracted into reusable components/partials, or normalized to one contract where extraction is not feasible.
 - Remaining variants are named, intentional, and visually consistent within their variant.
 - Every edited shared component was re-captured on every route where it appears (not just the route where the defect was noticed) and the geometry sweep passed.
 - The latest screenshots reflect the latest code.
@@ -444,31 +418,27 @@ If any item fails, continue fixing or clearly state the blocker. Do not present 
 
 ## Audit Cadence and Ownership
 
-A one-shot audit ages. Without a cadence and a clear owner per surface, the polish bar drifts back to "fine" within a quarter. Lock in both before the audit is declared complete.
+A one-shot audit ages. Without a cadence and a clear owner per surface, the polish bar drifts back to "fine" within a quarter. Lock in both before declaring complete.
 
 ### Cadence
 
-- **Every release-candidate build**: full geometry sweep, content-and-markup sweep, Lighthouse on the critical routes, axe on every route. Block the release on any new regression.
-- **Every shared-widget edit**: re-audit every route that imports the widget (per the diff-driven re-audit scope in Phase 2). Treat shared-widget PRs as cross-page changes, not local edits.
-- **Weekly drift sweep**: run the geometry sweep, the content-and-markup sweep, the drift collector, and a Lighthouse pass against a fixed set of canonical routes. Compare against the previous week's baseline. File issues for any regression that snuck in between releases.
-- **Quarterly reference comparison**: re-run Phase 16 reference-level design heuristics against the current production. The reference itself evolves; the bar is "match the reference's level of discipline today", not "match the reference from last year".
+- Every release-candidate build: full geometry sweep, content-and-markup sweep, Lighthouse on critical routes, axe on every route. Block the release on any new regression.
+- Every shared-widget edit: re-audit every route that imports the widget (per the diff-driven re-audit scope in Phase 2). Treat shared-widget PRs as cross-page changes, not local edits.
+- Weekly drift sweep: run the geometry sweep, content-and-markup sweep, drift collector, and a Lighthouse pass against a fixed set of canonical routes; compare against the previous week's baseline; file issues for any regression.
+- Quarterly reference comparison: re-run Phase 16 heuristics against current production. Match the reference's level of discipline today, not last year.
 
 ### Ownership
 
 Pick ONE model and write it down. Mixed ownership produces dropped polish work.
 
-- **Route-owning team** is the owning team of every route's polish bar: the team that ships features on the route also owns its geometry sweep, its Lighthouse score, and its drift findings. Works when teams are vertically aligned to surfaces.
-- **Polish rotation** assigns a dedicated rotating engineer (or pair) to the polish backlog for a fixed period (one to two weeks). The rotation runs the weekly drift sweep, files issues against owning teams, and drives the highest-impact fixes through. Works when teams are horizontally aligned and no single team owns the visual bar.
+- Route-owning team: the team that ships features on a route also owns its geometry sweep, Lighthouse score, and drift findings. Works when teams are vertically aligned to surfaces.
+- Polish rotation: a dedicated rotating engineer (or pair) for one to two weeks runs the weekly drift sweep, files issues against owning teams, and drives the highest-impact fixes. Works when teams are horizontally aligned and no single team owns the visual bar.
 
-Either way, polish work is named work on the roadmap, not a "if there is time" residual. The bar will drop the moment polish is the first thing to slip.
+Either way, polish work is named work on the roadmap, not an "if there is time" residual. The bar drops the moment polish is the first thing to slip.
 
 ## See Also
 
-- [components.md](components.md) for extraction discipline, contracts, and drift detection
-- [defects.md](defects.md) for the symptom-to-fix lookup table and the canonical geometry sweep
-- [accessibility.md](accessibility.md) for the WCAG framework, ARIA, contrast, focus, screen reader
-- [responsive.md](responsive.md) for capture viewports, breakpoints, and layout primitives
-- [design.md](design.md) for tokens, typography, color, and shadow language
-- [performance.md](performance.md) for image, font, and asset strategy
-- [lighthouse.md](lighthouse.md) for audit setup and score-driven fixes
-- [pre-launch.md](pre-launch.md) for the launch gate that runs alongside this workflow
+- components.md for extraction discipline, contracts, and drift detection
+- defects.md for the symptom-to-fix lookup table and the canonical geometry sweep
+- pre-launch.md for the launch gate that runs alongside this workflow
+- design.md for tokens, typography, color, and shadow language

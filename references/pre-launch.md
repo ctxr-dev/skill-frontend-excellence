@@ -1,29 +1,29 @@
 ---
 title: Pre-Launch Checklist
-purpose: The final verification gate before any public-visible page or interface ships. One checklist, every item runs every change.
+purpose: The final verification gate before any public-visible page or interface ships. One checklist, every item runs on every change, every failure is a blocking defect.
 load-when:
-  task-keywords: [pre-launch, checklist, ship, release, deployment, gate, verification, evidence, audit]
+  task-keywords: [pre-launch, checklist, ship, release, deployment, gate, verification, evidence, audit, lighthouse, screenshot]
   symptoms: [score dropped, Lighthouse score drop, consent banner CLS, font swap CLS, noindex with sitemap]
 prereq: SKILL.md
 related: [lighthouse.md, audit-workflow.md, security.md, defects.md]
-size: ~410 lines
+size: ~411 lines
 ---
 
 # Pre-Launch Checklist
 
-The final verification gate before any public-visible page or interface is declared complete. Run every item on every change. Treat any failure as a blocking defect.
+The final gate before a public-visible page or interface is declared complete.
 
-## How to Use This Checklist
+## How to Use
 
-1. Print or pin in your editor.
-2. Walk top to bottom on every page that changed.
-3. For shared components, walk every page that consumes them.
-4. Don't skip items because "they passed last time"; regressions hide in unchanged areas.
-5. If a page genuinely doesn't apply (e.g., no forms), mark "n/a"; don't silently skip.
+- Walk top to bottom on every page that changed.
+- For shared components, walk every page that consumes them.
+- Never skip an item because it passed last time; regressions hide in unchanged areas.
+- Mark "n/a" explicitly when a section does not apply (e.g., no forms); never silently skip.
+- Treat any failure as a blocking defect.
 
 ## 1. Lighthouse (Production Build)
 
-Run against the production build, not the dev server. Run mobile and desktop separately. Run at least 3 times; take the median.
+Run against the production build (not the dev server), mobile and desktop separately, at least 3 times, take the median.
 
 ```
 <framework-build>
@@ -36,10 +36,9 @@ npx lighthouse "http://localhost:3001/<path>" \
   --chrome-flags="--headless=new --no-sandbox --disable-gpu" \
   --only-categories=performance,accessibility,best-practices,seo --quiet
 
-# Desktop
+# Desktop: same plus --preset=desktop, output to /tmp/lh-desk.json
 npx lighthouse "http://localhost:3001/<path>" \
-  --output=json --output-path=/tmp/lh-desk.json \
-  --preset=desktop \
+  --output=json --output-path=/tmp/lh-desk.json --preset=desktop \
   --chrome-flags="--headless=new --no-sandbox --disable-gpu" \
   --only-categories=performance,accessibility,best-practices,seo --quiet
 ```
@@ -49,25 +48,25 @@ npx lighthouse "http://localhost:3001/<path>" \
 | Performance | >= 95 | >= 99 |
 | Accessibility | 100 | 100 |
 | Best Practices | 100 | 100 |
-| SEO | 100 (or n/a for noindex pages) | 100 (or n/a for noindex pages) |
+| SEO | 100 (n/a for noindex pages) | 100 (n/a for noindex pages) |
 
-Verify each category. If any score drops below the bar, identify the failing audit and fix per [lighthouse.md](lighthouse.md).
-
-Run BOTH programmatic sweeps: the geometry sweep (visual, headless browser) and the content-and-markup sweep (SEO and HTML validity, Node over the built HTML). See [defects.md](defects.md) for both. A route is not signed off until both return clean.
-
-- [ ] Verify the SHIPPED artifact, not the source. Static files and headers (a `_headers` or redirects file, `robots.txt`, `sitemap.xml`, security headers, the manifest) are copied, transformed, or sometimes dropped by the build. Check them in the built output directory and, after deploy, in the live HTTP response (`curl -I https://...`), not just in the source tree. A correct source `_headers` that did not make it into the build is the classic "it works locally" header bug.
+- [ ] If any category drops below the bar, identify the failing audit and fix per [lighthouse.md](lighthouse.md).
+- [ ] Run BOTH programmatic sweeps and require both clean: geometry sweep (visual, headless browser) and content-and-markup sweep (Node over built HTML). See [defects.md](defects.md). A route is not signed off until both return clean.
+- [ ] Verify the SHIPPED artifact, not the source: check static files and headers (`_headers`/redirects, `robots.txt`, `sitemap.xml`, security headers, manifest) in the built output directory and in the live response (`curl -I https://...`), not just the source tree. A correct source header that did not make it into the build is the classic "it works locally" header bug.
 
 ## 2. Core Web Vitals (Lab)
 
-From the same Lighthouse run, verify each metric:
+From the same Lighthouse run:
 
-- [ ] LCP < 2.5s mobile, < 2.0s desktop
-- [ ] CLS < 0.1 mobile, < 0.05 desktop
-- [ ] TBT < 200ms mobile, < 100ms desktop
-- [ ] FCP < 1.8s mobile, < 1.0s desktop
-- [ ] TTFB < 800ms mobile, < 600ms desktop
+| Metric | Mobile | Desktop |
+|--------|--------|---------|
+| LCP | < 2.5s | < 2.0s |
+| CLS | < 0.1 | < 0.05 |
+| TBT | < 200ms | < 100ms |
+| FCP | < 1.8s | < 1.0s |
+| TTFB | < 800ms | < 600ms |
 
-INP is not in lab Lighthouse; verify in the field via `web-vitals` JS instrumentation.
+- [ ] INP is not in lab Lighthouse; verify in the field via `web-vitals` JS instrumentation.
 
 ## 3. Asset Budgets
 
@@ -76,23 +75,22 @@ INP is not in lab Lighthouse; verify in the field via `web-vitals` JS instrument
 - [ ] Above-the-fold image budget met
 - [ ] <= 2 font families, <= 4 weights total
 - [ ] Third-party scripts within count and main-thread time budget
-
-If your tooling supports `bundlesize`, `size-limit`, or a custom CI check, run it. Treat budget violations as blocking.
+- [ ] If tooling supports `bundlesize`, `size-limit`, or a custom CI check, run it; treat budget violations as blocking
 
 ## 4. Accessibility
 
-### Automated
+Automated:
 
 - [ ] Lighthouse Accessibility = 100
 - [ ] axe DevTools (or `@axe-core/playwright`) shows zero violations
 - [ ] HTML validates (no broken markup)
 
-### Manual
+Manual:
 
 - [ ] Tab through the entire page in document order
 - [ ] Every interactive element shows a visible focus ring with 3:1 contrast against surface and resting state
 - [ ] Esc closes any open modal, popover, dropdown
-- [ ] Forms: labels visible, required marked, error inline + announced, focus moves to first invalid
+- [ ] Forms: labels visible, required marked, error inline + announced, focus moves to first invalid (see [forms.md](forms.md))
 - [ ] Modals: focus moves in on open, trapped while open, restored to trigger on close
 - [ ] Screen reader pass on the primary user flow (VoiceOver or NVDA)
 - [ ] Reading order matches visual order
@@ -101,7 +99,7 @@ If your tooling supports `bundlesize`, `size-limit`, or a custom CI check, run i
 - [ ] Links: descriptive text (not "click here")
 - [ ] Skip-to-content link present and working
 
-### Visual accessibility
+Visual accessibility:
 
 - [ ] Body text contrast >= 4.5:1 in both light and dark mode (verified independently, not by inversion)
 - [ ] Large text and meaningful UI graphics >= 3:1
@@ -111,7 +109,7 @@ If your tooling supports `bundlesize`, `size-limit`, or a custom CI check, run i
 
 ## 5. Responsive
 
-Test at every breakpoint and orientation.
+Test at every breakpoint and orientation:
 
 - [ ] 320px (smallest supported phone)
 - [ ] 375px (typical phone)
@@ -134,8 +132,8 @@ Per breakpoint:
 - [ ] Modals fit smallest viewport
 - [ ] Safe areas respected (notch, dynamic island, gesture bar)
 - [ ] `100dvh` (not `100vh`) for full-height mobile sections
-- [ ] Mobile nav works with JavaScript disabled (a `<noscript>` fallback or static links that enhance).
-- [ ] Modals and drawers lock body scroll AND compensate for scrollbar width (no sideways jump on open or close).
+- [ ] Mobile nav works with JavaScript disabled (a `<noscript>` fallback or static links that enhance)
+- [ ] Modals and drawers lock body scroll AND compensate for scrollbar width (no sideways jump on open or close)
 
 ## 6. Theme
 
@@ -163,7 +161,7 @@ Per breakpoint:
 
 ## 8. Visual Quality
 
-### Typography
+Typography:
 
 - [ ] Maximum 2 font families, 4 weights total
 - [ ] Distinctive choices (not just Inter on white)
@@ -173,20 +171,20 @@ Per breakpoint:
 - [ ] Line length 60-75 characters for prose
 - [ ] Tabular figures for numeric columns
 
-### Color
+Color:
 
 - [ ] Semantic tokens used (no raw hex in components)
 - [ ] Dominant + 1-2 accents (not evenly distributed)
 - [ ] Brand color contrasts properly in both modes
 - [ ] Neutral scale used consistently for surfaces and text
 
-### Spacing
+Spacing:
 
 - [ ] Spacing scale chosen (4-pt or 8-pt)
 - [ ] No random spacing values
 - [ ] Visual rhythm consistent
 
-### Iconography
+Iconography:
 
 - [ ] One icon set throughout
 - [ ] Consistent stroke width
@@ -194,11 +192,11 @@ Per breakpoint:
 - [ ] No emoji as structural icons (only as accents where intentional)
 - [ ] SVG only (no PNG icons)
 
-### Composition
+Composition:
 
 - [ ] At least one section breaks the safe centered three-card layout (where appropriate to the brand)
-- [ ] Visual hierarchy: scan the page; the most important element is the largest/boldest
-- [ ] Whitespace intentional; not just residual
+- [ ] Visual hierarchy: scanning the page, the most important element is the largest/boldest
+- [ ] Whitespace intentional, not just residual
 - [ ] One primary CTA per screen
 
 ## 9. SEO (public-visible pages)
@@ -219,14 +217,14 @@ Per breakpoint:
 - [ ] Listed in sitemap.xml (if indexable)
 - [ ] HTTPS, no mixed content
 - [ ] No render-blocking content critical to indexing
-- [ ] Content-and-markup sweep over the built HTML returns clean: one H1 per page, title and description in range (rendered length), self-referencing canonical, OG tags, every JSON-LD parseable, every image has alt, no duplicate ids, no orphan pages (except an error page).
-- [ ] If AI discovery matters: `llms.txt` exists and is complete, robots.txt does not block major AI crawlers (and any dedicated user-agent group repeats all disallows), load-bearing facts are server-rendered.
+- [ ] Content-and-markup sweep over built HTML returns clean: one H1 per page, title and description in range (rendered length), self-referencing canonical, OG tags, every JSON-LD parseable, every image has alt, no duplicate ids, no orphan pages (except an error page)
+- [ ] If AI discovery matters: `llms.txt` exists and is complete, robots.txt does not block major AI crawlers (and any dedicated user-agent group repeats all disallows), load-bearing facts are server-rendered
 
 ## 10. State Coverage
 
 Every screen and component has intentional designs for:
 
-- [ ] Empty (with message and action, not blank)
+- [ ] Empty (message and action, not blank)
 - [ ] Loading (skeleton matching layout, or spinner)
 - [ ] Success (brief feedback)
 - [ ] Error (cause + fix + recovery action)
@@ -239,7 +237,7 @@ Every screen and component has intentional designs for:
 
 - [ ] Every input has a visible, programmatic label
 - [ ] Right `type` and `inputmode` for the data
-- [ ] `autocomplete` per WHATWG spec (especially for username/password/address/payment)
+- [ ] `autocomplete` per WHATWG spec (especially username/password/address/payment)
 - [ ] Required fields marked visually + `aria-required`
 - [ ] Validation on blur (not on every keystroke)
 - [ ] Errors inline, near the field, with cause + fix
@@ -276,16 +274,15 @@ Test on at least:
 - [ ] Latest Chrome (Chromium engine, what most users have)
 - [ ] Latest Safari (WebKit, all iOS users + many macOS users)
 - [ ] Latest Firefox (Gecko, smaller share but valuable diversity)
+- [ ] Supported older browsers (per browserslist): spot-check key flows
 
-For supported older browsers (per browserslist), spot-check key flows.
+Safari watch-list:
 
-For Safari:
-
-- `:has()` (now widely supported, but verify on older iOS)
-- `<dialog>` (added in Safari 15.4)
-- `view-transition` API (Safari 18+)
-- Container queries (Safari 16+)
-- Backdrop filter (use prefixed `-webkit-backdrop-filter`)
+- [ ] `:has()` (now widely supported, but verify on older iOS)
+- [ ] `<dialog>` (added in Safari 15.4)
+- [ ] `view-transition` API (Safari 18+)
+- [ ] Container queries (Safari 16+)
+- [ ] Backdrop filter (use prefixed `-webkit-backdrop-filter`)
 
 ## 14. Real-User Monitoring
 
@@ -298,9 +295,7 @@ If RUM is set up:
 
 ## 15. Security Headers
 
-Cross-link: full header guidance and policy authoring lives in [security.md](security.md). This section is the launch gate.
-
-Verify the production response (`curl -I https://<host>`) carries every header below. Source headers that did not make it into the build are the classic "it works locally" header bug.
+Launch gate only; full policy authoring lives in [security.md](security.md). Verify the production response (`curl -I https://<host>`) carries every header below; source headers that did not make it into the build are the classic "it works locally" header bug.
 
 - [ ] `Strict-Transport-Security` set with a long `max-age` (>= 1 year), `includeSubDomains`, and `preload` once the domain is HSTS-preload-listed
 - [ ] `Content-Security-Policy` present, restrictive, no `unsafe-inline` for scripts; `frame-ancestors` set; report endpoint configured
@@ -317,32 +312,32 @@ Verify the production response (`curl -I https://<host>`) carries every header b
 - [ ] Reject parity verified: the reject button is equally clickable, equally large, and reaches the same dismiss endpoint
 - [ ] Banner reserves its space (CLS-safe overlay): use `position: fixed` over reserved layout, or render server-side at known dimensions; verify CLS < 0.1 with the banner visible
 - [ ] `Sec-GPC: 1` request header is honoured: treat it as an opt-out signal for non-essential cookies, analytics, and ad personalisation
-- [ ] Analytics and non-essential third-party scripts load only AFTER explicit consent (or never, when `Sec-GPC: 1` arrives); verify by loading the page in a fresh profile and watching the network panel before clicking "Accept"
+- [ ] Analytics and non-essential third-party scripts load only AFTER explicit consent (or never when `Sec-GPC: 1` arrives); verify by loading in a fresh profile and watching the network panel before clicking "Accept"
 
 ## 17. Error-Tracking Sanity Check
 
 - [ ] Source-map upload pipeline runs in the production build and posts maps to the error tracker's private endpoint (maps NOT served from the public origin)
 - [ ] Throw a known error in production (e.g., a hidden test button that calls `throw new Error("prod-sanity-<commit-sha>")`) and confirm it lands in the error tracker within the expected window
-- [ ] Confirm the symbolicated stack trace shows original file names, original line numbers, and original function names (not minified `t.aB.x`)
+- [ ] Confirm the symbolicated stack trace shows original file names, line numbers, and function names (not minified `t.aB.x`)
 - [ ] Release tag (commit SHA or version) is attached to the captured event so it groups against the right deploy
 
 ## 18. i18n Smoke Test
 
-Full pipeline detail lives in [i18n.md](i18n.md). This gate is the launch-time subset.
+Launch-time subset; full pipeline lives in [i18n.md](i18n.md).
 
-- [ ] At least one non-Latin locale (e.g., Japanese, Arabic, Hindi, Greek) renders without falling back to a system font: verify by inspecting `font-family` resolution in DevTools on a glyph in the target script
-- [ ] One RTL locale (Arabic or Hebrew) loads with mirrored navigation (logical properties for borders, padding, and icons), no layout breaks, no clipped text, no LTR-only icons that lose meaning when flipped
+- [ ] At least one non-Latin locale (Japanese, Arabic, Hindi, Greek) renders without falling back to a system font: inspect `font-family` resolution in DevTools on a glyph in the target script
+- [ ] One RTL locale (Arabic or Hebrew) loads with mirrored navigation (logical properties for borders, padding, icons), no layout breaks, no clipped text, no LTR-only icons that lose meaning when flipped
 - [ ] Numbers and dates use `Intl.NumberFormat` and `Intl.DateTimeFormat` against the active locale
 - [ ] `<html lang>` and `dir` are set per route, not hardcoded to one value
 
 ## 19. Service Worker Kill-Switch Gate
 
-If the site ships a service worker, a deployable kill-switch is the difference between a survivable bad release and a multi-day outage. Full lifecycle guidance lives in [pwa-offline.md](pwa-offline.md).
+If the site ships a service worker; full lifecycle lives in [pwa-offline.md](pwa-offline.md).
 
-- [ ] A "unregister all SWs" page exists at a known stable path (e.g., `/_/unregister-sw`), is deployable independently of the SW build, and runs `navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()))` plus a `caches.keys().then(ks => ks.forEach(k => caches.delete(k)))` pass
-- [ ] The SW respects a `?nosw=1` query parameter on the entry navigation: when present, the SW does not handle the fetch (or unregisters itself), so a fresh request can bypass a broken cached shell
-- [ ] The SW does NOT cache its own script with a long TTL: the SW file is served with `Cache-Control: max-age=0` (or `no-cache`), so the browser can pick up a corrected SW on the next revisit
-- [ ] The SW versioning strategy is documented (cache name carries a build id; old caches are deleted in `activate`)
+- [ ] A "unregister all SWs" page exists at a known stable path (e.g., `/_/unregister-sw`), deployable independently of the SW build, running `navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()))` plus `caches.keys().then(ks => ks.forEach(k => caches.delete(k)))`
+- [ ] The SW respects a `?nosw=1` query parameter on the entry navigation: when present, the SW does not handle the fetch (or unregisters itself) so a fresh request can bypass a broken cached shell
+- [ ] The SW does NOT cache its own script with a long TTL: the SW file is served with `Cache-Control: max-age=0` (or `no-cache`) so the browser picks up a corrected SW on next revisit
+- [ ] The SW versioning strategy is documented (cache name carries a build id; old caches deleted in `activate`)
 
 ## 20. Documentation
 
@@ -364,32 +359,30 @@ If the site ships a service worker, a deployable kill-switch is the difference b
 
 ## 22. Multi-Page Polish Gate
 
-If the change affects multiple pages or shared widgets, the polish gate must pass before launch. The full procedure lives in [audit-workflow.md](audit-workflow.md) Phase 19. The launch-relevant subset is:
+Launch-time subset; full Phase 19 acceptance list in [audit-workflow.md](audit-workflow.md) is authoritative when both gates apply. Any failure is blocking.
 
 - [ ] Widget inventory exists for the affected widget families
-- [ ] Same-purpose widgets are extracted to one source of truth or normalized to one contract
+- [ ] Same-purpose widgets extracted to one source of truth or normalized to one contract
 - [ ] Drift collector returns no unexplained differences across pages for shared widgets
 - [ ] Geometry sweep returns zero issues on every affected route at `1440x900` and `375x812`
 - [ ] Before-and-after screenshots captured at both viewports for every affected route
 - [ ] Reference comparison heuristics in [design.md](design.md) pass
 - [ ] No same-purpose widget looks different on two routes without a named, intentional variant
 
-Treat any failure as blocking. The full Phase 19 acceptance list in [audit-workflow.md](audit-workflow.md) is authoritative when both gates apply; this section is the launch-time subset.
-
 ## 23. Final Smell Test
 
-Open the page in a fresh browser (incognito to avoid cached assets). Walk through it as a new user would. Ask yourself:
+Open in a fresh browser (incognito, no cached assets). Walk through as a new user:
 
-- Is the primary action obvious within 2 seconds?
-- Does the surface feel like a single product, or a collection of unrelated pieces?
-- Does it look distinctive, or could it be any other product's equivalent screen?
-- Would I be proud to share this URL?
+- [ ] Is the primary action obvious within 2 seconds?
+- [ ] Does the surface feel like a single product, or a collection of unrelated pieces?
+- [ ] Does it look distinctive, or could it be any other product's equivalent screen?
+- [ ] Would I be proud to share this URL?
 
 If "no" to any, address it before declaring complete.
 
 ## 24. Evidence Manifest
 
-The single list of artefacts the PR must produce. Link every item from the PR description. Everything below must be reproducible from the PR description alone: a reviewer should be able to open the PR, follow the links, and re-run the checks without asking questions.
+The single list of artefacts the PR must produce. Link every item from the PR description; a reviewer must be able to re-run every check from the links alone. A PR missing any item is incomplete and review can be declined.
 
 - [ ] Lighthouse JSON for mobile: file path (e.g., `audit/lh-mob.json`), median of >= 3 runs
 - [ ] Lighthouse JSON for desktop: file path (e.g., `audit/lh-desk.json`), median of >= 3 runs
@@ -399,27 +392,20 @@ The single list of artefacts the PR must produce. Link every item from the PR de
 - [ ] Baseline screenshot directory at `1440x900` and `375x812`: file path (e.g., `audit/baseline/`)
 - [ ] After screenshot directory at `1440x900` and `375x812`: file path (e.g., `audit/after/`)
 - [ ] Per-route audit table (one row per route): issues found, fixes applied, before screenshot link, after screenshot link, format matches the table in [audit-workflow.md](audit-workflow.md) Phase 18
-- [ ] Re-run instructions: the exact commands a reviewer runs to reproduce every artefact above (build command, capture script, sweep invocations)
-
-A PR description missing any of the above is incomplete. Reviewer can decline review until the manifest is filled.
+- [ ] Re-run instructions: the exact commands a reviewer runs to reproduce every artefact (build command, capture script, sweep invocations)
 
 ## When the Checklist Fails
 
-Don't move on. The checklist exists because every item on it has, at some point, been the regression that shipped to production.
-
-For each failure:
+Every item here has, at some point, been the regression that shipped. For each failure:
 
 1. Identify the specific cause.
 2. Fix at the right layer (component, page, system, or design token).
-3. Re-run the relevant section of the checklist (not the whole thing).
+3. Re-run the relevant section (not the whole thing).
 4. Once green, run a final full pass to verify nothing else regressed.
 
 ## See Also
 
 - [lighthouse.md](lighthouse.md) for score-driven audit fixes
-- [accessibility.md](accessibility.md) for a11y deep dive
-- [seo.md](seo.md) for SEO requirements
-- [responsive.md](responsive.md) for layout testing
-- [audit-workflow.md](audit-workflow.md) for multi-page polish work
-- [components.md](components.md) for component contracts and drift detection
-- [defects.md](defects.md) for symptom-to-fix lookup and geometry sweep
+- [audit-workflow.md](audit-workflow.md) for multi-page polish work and the evidence-capture procedure
+- [security.md](security.md) for header policy authoring
+- [defects.md](defects.md) for symptom-to-fix lookup and the geometry sweep

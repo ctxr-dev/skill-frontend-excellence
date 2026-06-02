@@ -1,46 +1,54 @@
 ---
 title: Build Hygiene
-purpose: Bundle, tree-shake, code-split, and audit dependencies so every shipped kilobyte is accounted for and the JS budget is auditable, not aspirational.
+purpose: Bundle, tree-shake, code-split, and audit dependencies so every shipped kilobyte has a line item and the JS budget is gated in CI, not aspirational.
 load-when:
-  task-keywords: [build, tree-shaking, dependency, sideEffects, lockfile, dead code, code splitting, bundle]
+  task-keywords: [build, tree-shaking, dependency, sideEffects, lockfile, dead code, code splitting, bundle, dead code, audit]
   symptoms: [bundle size grew, slow page, score dropped, LCP regression]
 prereq: SKILL.md
 related: [performance.md, security.md, observability.md, testing.md]
-size: ~400 lines
+size: ~362 lines
 ---
 
 # Build Hygiene
 
-Every kilobyte in the shipped bundle is paid for: by the user's network, by the CPU that parses it, by the main thread that runs it. Bundle hygiene turns that cost into an auditable line item.
+Every shipped kilobyte is paid for: by the user's network, by parse-and-compile CPU, by main-thread execution. Bundle hygiene makes that cost an auditable line item.
 
 ## Why Bundle Hygiene Matters
 
-The JS budget is real. On a mid-range Android, every 30 KB of gzipped JavaScript adds roughly 50 ms to parse-and-compile and another 100 to 200 ms to execute under cold-start conditions. A 90 KB compressed budget for the initial route, the target in this skill, has room for about 270 KB of decompressed code: enough for a small framework plus the route's logic, not enough for an unused chart library.
+| Fact | Value |
+|---|---|
+| Parse-and-compile cost (mid-range Android) | ~50 ms per 30 KB gzipped JS |
+| Execution cost under cold start | +100 to 200 ms per 30 KB gzipped JS |
+| Initial-route JS budget | 90 KB compressed (decompresses to ~270 KB of code) |
 
-Two patterns to refuse:
+Two refusals:
 
-- "Budgets are aspirational." If a budget is not gated in CI, it is a wish. See testing.md for `size-limit` and `bundlesize` gating.
-- "It is only one more dependency." One real project audit found an unused export pulled in by a barrel re-export accounted for 14 KB of the initial bundle. The package was a dependency of a dependency; nobody was reading it; tree-shaking should have removed it; a side-effects misdeclaration kept it in.
+- "Budgets are aspirational." A budget not gated in CI is a wish. Gate budgets with `size-limit` and `bundlesize` (see testing.md).
+- "It is only one more dependency." A real audit found an unused export pulled in by a barrel re-export accounted for 14 KB of the initial bundle: a dependency-of-a-dependency nobody read, kept in by a side-effects misdeclaration despite tree-shaking that should have removed it.
 
-The discipline: every dependency has a line item, every line item has an owner, every owner can defend the bytes.
+Discipline: every dependency has a line item, every line item has an owner, every owner can defend the bytes.
 
 ## Tree-Shaking at Depth
 
-Tree-shaking is dead-code elimination performed by the bundler on ESM imports. It only works when three preconditions hold: ES modules end-to-end, accurate `sideEffects` declarations, and static (analyzable) imports.
+Tree-shaking is dead-code elimination on ESM imports. Three preconditions, all required:
+
+- ES modules end-to-end
+- accurate `sideEffects` declarations
+- static (analyzable) imports
 
 ### ESM-only imports
 
-CommonJS resists tree-shaking because the module shape is not statically known until execution. A `require('lodash')` pulls every export. A `import { debounce } from 'lodash-es'` pulls only `debounce` and its transitive imports if `lodash-es` ships ESM (it does).
+CommonJS resists shaking: module shape is not statically known until execution, so `require('lodash')` pulls every export. `import { debounce } from 'lodash-es'` pulls only `debounce` plus its transitive imports.
 
-Three checks:
+| Check | Threshold/target |
+|---|---|
+| Authored packages declare module type | `"type": "module"` in `package.json`, or every authored file uses `.mjs` |
+| Dependencies expose ESM | each has an `"exports"` map with an `"import"` condition, not just `"require"` |
+| Shipped code is CJS-free | search the production bundle: no `require(` calls remain |
 
-1. Every `package.json` you author has `"type": "module"` or every authored file uses `.mjs`.
-2. Every dependency you bring in has an `"exports"` map with an `"import"` condition, not just `"require"`.
-3. The build output does not include `require(` calls in shipped code (search the production bundle).
+### `sideEffects` in `package.json`
 
-### `sideEffects: false` in `package.json`
-
-A package marked `"sideEffects": false` tells the bundler that importing it for type-checking or named-export retrieval has no observable side effect, so unused imports can be dropped:
+`"sideEffects": false` tells the bundler that importing for named-export retrieval has no observable side effect, so unused imports drop:
 
 ```json
 {
@@ -50,7 +58,7 @@ A package marked `"sideEffects": false` tells the bundler that importing it for 
 }
 ```
 
-If some files do have side effects (a CSS import, a polyfill registration, a global mutation), declare them explicitly:
+Declare side-effectful files explicitly (a CSS import, a polyfill registration, a global mutation):
 
 ```json
 {
@@ -58,23 +66,21 @@ If some files do have side effects (a CSS import, a polyfill registration, a glo
 }
 ```
 
-The default (no `sideEffects` field) is the worst case: the bundler must assume every import is load-bearing and ship everything reachable.
+Omitting the `sideEffects` field is the worst case: the bundler must assume every import is load-bearing and ship everything reachable.
 
 ### The three traps
 
-1. **Re-export barrels.** A `src/index.js` of the form `export * from './a'; export * from './b';` forces the bundler to walk every transitive module to determine reachability. If one of them has a side effect or resists analysis, the entire barrel is included. Prefer deep imports (`import { foo } from 'pkg/foo'`) over barrel imports (`import { foo } from 'pkg'`) for any non-trivial library.
-2. **Default exports.** A module that exports only a default object resists property-level shaking: the bundler cannot prove that consuming code uses only one property. Convert default exports to named exports for any module that contains more than one logical export.
-3. **Dynamic property access.** Code like `lib[methodName]()` or `import(`./${variable}.js`)` prevents the bundler from statically determining which exports are reached. Tree-shaking falls back to including everything. Replace dynamic access with switch statements or named lookups when possible.
+- Re-export barrels: `export * from './a'; export * from './b';` forces the bundler to walk every transitive module; if any module has a side effect or resists analysis, the whole barrel ships. Prefer deep imports (`import { foo } from 'pkg/foo'`) over barrel imports (`import { foo } from 'pkg'`) for any non-trivial library.
+- Default exports: a default object resists property-level shaking (the bundler cannot prove only one property is used). Convert default exports to named exports for any module with more than one logical export.
+- Dynamic property access: `lib[methodName]()` or `import(`./${variable}.js`)` prevents static export determination; shaking falls back to including everything. Replace with switch statements or named lookups.
 
-Check: build a production bundle, open the bundle analyzer, search for any package that is supposedly imported only for one function. If the bundle contains the rest of the package, one of the three traps is in play.
+Check: build a production bundle, open the analyzer, search for any package supposedly imported for one function. If the rest of the package is present, one of the three traps is in play.
 
 ## `sideEffects` Declarations and How to Verify
 
-Two levels of declaration: the package level (`package.json`) and the file level (a build-tool comment).
+Two declaration levels: package (`package.json`) and file (a build-tool comment).
 
 ### Package-level
-
-The `sideEffects` field in `package.json` is the most important declaration. Set it correctly for every package you author:
 
 | Pattern | `sideEffects` value |
 |---|---|
@@ -84,41 +90,35 @@ The `sideEffects` field in `package.json` is the most important declaration. Set
 
 ### File-level
 
-Bundlers respect comments that mark a file as side-effect-free:
-
-```javascript
-/*#__PURE__*/
-```
-
-Use the `/*#__PURE__*/` annotation on factory calls so the bundler can drop them if the result is unused:
+Use the `/*#__PURE__*/` annotation on factory calls so the bundler drops them if the result is unused:
 
 ```javascript
 export const validator = /*#__PURE__*/ buildValidator(SCHEMA);
 ```
 
-Without the annotation, `buildValidator(SCHEMA)` is presumed to have side effects and stays in the bundle even if `validator` is never imported.
+Without it, `buildValidator(SCHEMA)` is presumed side-effecting and stays even if `validator` is never imported.
 
 ### How to verify
 
-Three tools, one workflow:
-
-1. **Bundle analyzer** (`webpack-bundle-analyzer`, `rollup-plugin-visualizer`, `esbuild --analyze`, `vite-bundle-visualizer`). Run as part of every production build. Eyeball the largest squares.
-2. **Source map explorer**. Trace each kilobyte of the production bundle back to the source file that produced it. Surprises (unrelated packages showing up) point at side-effect leaks.
-3. **Diff between releases**. Snapshot the bundle composition on every release; flag any dependency that grew by more than 5 KB or any new dependency over 10 KB.
+| Tool | Use | Cadence |
+|---|---|---|
+| Bundle analyzer (`webpack-bundle-analyzer`, `rollup-plugin-visualizer`, `esbuild --analyze`, `vite-bundle-visualizer`) | eyeball the largest squares | every production build |
+| Source map explorer | trace each kilobyte back to its source file; unrelated packages = side-effect leaks | per investigation |
+| Diff between releases | flag any dependency that grew by more than 5 KB or any new dependency over 10 KB | every release |
 
 ## Code-Splitting Strategy
 
-The goal is to ship only the code the current view needs. Three granularities, picked per scenario.
+Ship only the code the current view needs. Three granularities.
 
 ### Route-level
 
-One chunk per route, loaded on navigation. This is the default for every modern framework (React Router, Vue Router, SvelteKit, SolidStart, Astro) and the highest-leverage split available.
+One chunk per route, loaded on navigation. The default in modern frameworks and the highest-leverage split.
 
-Check: open the network tab on the landing route. The number of JS requests should match the framework runtime plus the route entry, not the whole app.
+Check: on the landing route's network tab, the number of JS requests matches framework runtime plus the route entry, not the whole app.
 
 ### Component-level
 
-A heavy widget (rich-text editor, chart, code editor, file viewer) loaded lazily when the user first reaches a view that needs it. Use the platform `import()` with a Suspense or loading boundary:
+Lazy-load a heavy widget behind a Suspense or loading boundary using the platform `import()`:
 
 ```javascript
 async function openEditor() {
@@ -127,11 +127,11 @@ async function openEditor() {
 }
 ```
 
-Component-level splits earn their cost when the widget is over 30 KB compressed and used by fewer than half of route visitors. Below that threshold, the split adds latency without saving bytes for the typical user.
+Earns its cost when the widget is over 30 KB compressed and used by fewer than half of route visitors. Below that, the split adds latency without saving bytes for the typical user.
 
 ### Interaction-level
 
-Code loaded when the user signals intent: hover, focus, intersection with viewport. The pattern:
+Load on intent (hover, focus, intersection), guarded by a `loaded` flag:
 
 ```javascript
 const trigger = document.querySelector('#open-modal');
@@ -143,7 +143,7 @@ trigger.addEventListener('pointerenter', async () => {
 });
 ```
 
-For below-the-fold widgets, use IntersectionObserver to load when the viewport approaches:
+Below-the-fold widgets: load when the viewport approaches via IntersectionObserver with `{ rootMargin: '200px' }`:
 
 ```javascript
 const observer = new IntersectionObserver((entries) => {
@@ -156,7 +156,7 @@ const observer = new IntersectionObserver((entries) => {
 }, { rootMargin: '200px' });
 ```
 
-### The decision matrix
+### Decision matrix
 
 | Scenario | Strategy |
 |---|---|
@@ -165,107 +165,83 @@ const observer = new IntersectionObserver((entries) => {
 | Below-the-fold widget, used by many | Interaction-level (intersection) |
 | Modal opened by a button | Interaction-level (hover or focus) |
 | Hot path used by everyone | Bundle eagerly (no split) |
-| Auth-gated module | Route-level + auth check |
+| Auth-gated module | Route-level split plus auth check |
 
 ## Dependency-Cost Discipline
 
-Every `npm install <pkg>` is a budget decision. Three checkpoints before the install.
+Every install is a budget decision. Three checkpoints.
 
-### Bundlephobia gating
+| Checkpoint | Rule |
+|---|---|
+| Size gate (bundlephobia or equivalent) | Reject any production dependency over 30 KB minified-and-gzipped without a clear defended reason; reject any over 100 KB without a one-paragraph PR justification. |
+| Transitive tree | Before merge, run `npm install --dry-run <pkg>` and inspect the tree; a direct dependency pulling 40 transitive deps differs from one pulling two. Count transitives as part of the cost. |
+| Platform-first justification | Every dependency added in the last sprint has a PR comment explaining why the platform was not enough. |
 
-Before adding any production dependency, look up its bundlephobia (or equivalent) size. Reject any dependency that ships more than 30 KB minified-and-gzipped without a clear, defended reason. Reject any dependency that ships more than 100 KB without a one-paragraph justification in the PR.
+The "one dep doubled the bundle" failure mode: a date library added to format two timestamps eagerly loads its own locale data (200 KB), doubling the bundle. Responses in order of preference:
 
-### `npm install --dry-run` size check
-
-Before merging, run `npm install --dry-run <pkg>` and inspect the transitive tree. A direct dependency that pulls 40 transitive dependencies is a different proposition from one that pulls two. Treat the transitive count as part of the cost.
-
-### The "one dep doubled the bundle" failure mode
-
-A common pattern: a developer adds one date library to format two timestamps, the library imports its own locale data eagerly, the locale data is 200 KB, the bundle doubles. The smell: a single utility need that adds tens of kilobytes.
-
-Three responses, in order of preference:
-
-1. Use the platform (`Intl.DateTimeFormat`, `Intl.NumberFormat`, `Intl.RelativeTimeFormat`). See i18n.md for the catalog.
-2. Pick a slimmer alternative that scoped imports. The variant of a date library that supports tree-shaken plugin loading beats the variant that imports every locale at module load.
-3. Write the utility yourself. Five lines of `String.prototype.padStart` beat 30 KB of dependency in many cases.
-
-Check: every dependency added in the last sprint has a comment in the PR explaining why the platform was not enough.
+- Use the platform: `Intl.DateTimeFormat`, `Intl.NumberFormat`, `Intl.RelativeTimeFormat` (see i18n.md).
+- Pick a slimmer alternative with tree-shaken, scoped imports over one that imports every locale at module load.
+- Write the utility yourself: five lines of `String.prototype.padStart` beat 30 KB of dependency in many cases.
 
 ## Lockfile Hygiene
 
-The lockfile is the source of truth for reproducible builds. Treat it with the same discipline as the schema.
+The lockfile is the source of truth for reproducible builds.
 
-### Lockfile in version control
+| Check | Rule |
+|---|---|
+| Lockfile committed | Always commit `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`; without it CI produces different bundles each run and regressions become unattributable. |
+| CI install command | Use `npm ci` (or `pnpm install --frozen-lockfile`, `yarn install --immutable`): installs exactly what the lockfile pins and fails on `package.json`/lockfile disagreement. Never plain `npm install` in CI. |
+| Scan CI config | Search for `npm install` without `ci`; every occurrence is a defect. |
+| Dirty-lockfile gate | CI fails if the lockfile is dirty after install: `git diff --exit-code package-lock.json`. |
+| Review lockfile diff | The lockfile is reviewed in every PR that touches `package.json`. |
 
-Always commit `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`. A repo without a committed lockfile produces different bundles on every CI run; performance regressions become unattributable.
-
-### Never `npm install` in CI
-
-CI uses `npm ci` (or `pnpm install --frozen-lockfile`, `yarn install --immutable`). These commands install exactly what the lockfile pins and fail if `package.json` and the lockfile disagree. Plain `npm install` mutates the lockfile, which means CI can install a different version than the developer tested.
+CI install step:
 
 ```yaml
 - run: npm ci
 ```
 
-Three checks:
-
-1. Search the CI config for `npm install` (without `ci`). Every occurrence is a defect.
-2. The CI job fails if the lockfile is dirty after install (`git diff --exit-code package-lock.json`).
-3. The lockfile is reviewed in every PR that touches `package.json`. Reviewers ignore the lockfile diff at their peril.
-
 ### The `npm audit` budget
-
-Set a vulnerability threshold and gate CI on it:
 
 ```text
 npm audit --audit-level=high --omit=dev
 ```
 
-Reject high and critical vulnerabilities in production dependencies. Track and triage moderate vulnerabilities on a known cadence (weekly or sprint-aligned). Dev dependencies are filtered out because they do not ship to users.
-
-Cross-link: security.md covers the broader supply-chain story including Subresource Integrity for third-party scripts.
+Reject high and critical vulnerabilities in production dependencies. Track and triage moderate vulnerabilities on a weekly or sprint-aligned cadence. Dev dependencies are filtered out because they do not ship to users. See security.md for Subresource Integrity and the broader supply-chain story.
 
 ## Dead-Code Elimination
 
-Dead code is code the bundler can prove is unreachable. Unreferenced-but-imported code is code that the bundler thinks might be reachable because of side-effect declarations. They look similar; they have different fixes.
+Dead code (provably unreachable) and unreferenced-but-imported code look similar but have different fixes.
 
 ### Minifier configuration
 
 Modern minifiers (`terser`, `swc`, `esbuild` in minify mode) do dead-branch elimination as part of compression. Verify in CI:
 
-- The production build has `NODE_ENV` set to `production` so dev-only branches drop out.
-- The minifier configuration enables `dead_code`, `unused`, `pure_funcs`, and `passes: 2` (terser) or the framework equivalent.
-- Production builds do not contain string literals from dev-only code paths (search the bundle for known dev-only error messages).
+- The production build sets `NODE_ENV` to `production` so dev-only branches drop out.
+- The minifier enables `dead_code`, `unused`, `pure_funcs`, and `passes: 2` (terser) or the framework equivalent.
+- Production builds contain no string literals from dev-only code paths (search the bundle for known dev-only error messages).
 
-### Dead-code vs unreferenced-but-imported
-
-A dead branch (`if (false) { ... }`) is dropped by the minifier. An unreferenced import (`import './polyfill';` where the polyfill registers nothing the rest of the code reaches) cannot be dropped without an accurate `sideEffects` declaration: from the bundler's point of view, the side effect is the whole point of the import.
-
-The fix differs:
+### Fix table
 
 | Pattern | Fix |
 |---|---|
-| Dead branch | Trust the minifier; verify the branch is gone in the prod bundle. |
-| Unreferenced import with side effects | Either remove the import or accurately scope `sideEffects` so it can be dropped when unused. |
+| Dead branch (`if (false) { ... }`) | Trust the minifier; verify the branch is gone in the prod bundle. |
+| Unreferenced import with side effects | Remove the import, or accurately scope `sideEffects` so it can be dropped when unused. |
 | Imported export, never read | Verify the package has `sideEffects: false`; if not, file an upstream issue or patch. |
 
 ## `import()` Analysis
 
-The bundler determines lazy chunks by walking every `import()` expression at build time. The shape of the expression matters.
-
-### What the bundler can analyze
+The bundler determines lazy chunks by walking every `import()` at build time. Shape matters:
 
 ```javascript
 import('./modal.js');                 // Static path: produces one chunk.
-import(`./views/${viewName}.js`);     // Template with a literal head: produces one chunk per matching file.
-import(routeModule);                  // Pure variable: bundler cannot analyze; falls back to one big chunk or fails.
+import(`./views/${viewName}.js`);     // Template with literal head: one chunk per matching file.
+import(routeModule);                  // Pure variable: not analyzable; falls back to one big chunk or fails.
 ```
 
-Prefer the first two forms. Avoid the third in production code; it defeats the purpose of code-splitting.
+Prefer the first two; avoid the pure-variable form in production code (it defeats code-splitting).
 
-### Webpack magic comments
-
-Webpack accepts inline directives that name the chunk and signal preload or prefetch intent:
+### Magic comments and bundler equivalents
 
 ```javascript
 import(/* webpackChunkName: "editor" */ './editor.js');
@@ -273,9 +249,7 @@ import(/* webpackPrefetch: true */ './settings.js');
 import(/* webpackPreload: true */ './critical-modal.js');
 ```
 
-`webpackChunkName` produces stable file names (useful for cache hit rate). `webpackPrefetch` adds `<link rel="prefetch">` so the browser fetches the chunk when idle. `webpackPreload` adds `<link rel="preload">` for immediately-needed chunks.
-
-### Equivalents in other bundlers
+`webpackChunkName` produces stable file names (better cache hit rate); `webpackPrefetch` adds `<link rel="prefetch">` (fetched when idle); `webpackPreload` adds `<link rel="preload">` (immediately needed).
 
 | Bundler | Chunk naming | Preload signal |
 |---|---|---|
@@ -285,7 +259,7 @@ import(/* webpackPreload: true */ './critical-modal.js');
 | esbuild | `chunkNames` config | Manual `<link>` tag |
 | Parcel | Automatic | Manual `<link>` tag |
 
-For bundlers without inline preload directives, add the resource hint to the document head:
+For bundlers without inline preload directives, add the hint to the document head:
 
 ```html
 <link rel="prefetch" href="/assets/editor.abc123.js" as="script">
@@ -293,21 +267,15 @@ For bundlers without inline preload directives, add the resource hint to the doc
 
 ## Source Maps for Builds
 
-Source maps make production stack traces readable without shipping unminified code to users.
-
-### Separate hidden source maps
-
-Three patterns; the right one for production:
+Source maps make production stack traces readable without shipping unminified code.
 
 | Pattern | What it does | When |
 |---|---|---|
-| Inline source maps (`//# sourceMappingURL=data:`) | Embeds the map in the bundle | Dev only; never production |
-| Public source maps (`//# sourceMappingURL=file.js.map`) | Map sits next to the bundle, browser fetches it | OK for open-source; leaks source for proprietary |
-| Hidden source maps (no comment, build emits the map) | Map is built but not referenced; upload to error tracker | Production for proprietary code |
+| Inline (`//# sourceMappingURL=data:`) | Embeds the map in the bundle | Dev only; never production |
+| Public (`//# sourceMappingURL=file.js.map`) | Map sits next to the bundle, browser fetches it | OK for open-source; leaks source for proprietary |
+| Hidden (no comment, build emits the map) | Map built but not referenced; upload to error tracker | Production for proprietary code |
 
-The production pattern: build hidden source maps, upload them to the error-tracking service as part of the deploy, never serve them from the origin. The error tracker symbolicates stack traces; users see a minified bundle but the team sees real frames.
-
-Build configuration:
+Production pattern: build hidden source maps, upload them to the error tracker on deploy, never serve them from origin. Users see a minified bundle; the team sees real frames.
 
 ```text
 # Webpack
@@ -323,21 +291,21 @@ sourcemap: 'hidden'
 sourcemap: 'external'
 ```
 
-Upload step in CI (Sentry, Datadog, Bugsnag, Rollbar all support similar):
+Upload step in CI (error trackers support similar commands):
 
 ```text
 sentry-cli sourcemaps upload --release "$VERSION" ./dist
 ```
 
-Cross-link: observability.md covers the full error-capture pipeline including the source-map upload step.
+See observability.md for the full error-capture pipeline that depends on the source-map upload.
 
 ## Polyfill Discipline
 
-Polyfills cost bytes. Ship the minimum needed for the supported browsers, never more.
+Ship the minimum polyfills the supported browsers need, never more.
 
 ### `browserslist` as the source of truth
 
-The single source of truth for which browsers to support lives in `package.json`:
+One list in `package.json`, read by PostCSS, Babel, Autoprefixer, and the ESLint browser-compat plugin. Do not duplicate per tool:
 
 ```json
 {
@@ -349,19 +317,11 @@ The single source of truth for which browsers to support lives in `package.json`
 }
 ```
 
-Every build tool (PostCSS, Babel, Autoprefixer, ESLint browser-compat plugin) reads this list. Keep one list; do not duplicate it per tool.
-
-Audit the resolved list at least once per quarter:
-
-```text
-npx browserslist
-```
-
-Confirm the list still matches business reality: drop browsers below 0.2 percent usage, drop unsupported browsers from the vendor.
+Audit the resolved list at least once per quarter: run `npx browserslist`, drop browsers below 0.2 percent usage and vendor-unsupported browsers.
 
 ### `core-js` minimum-target subsets
 
-Configure `core-js` with the same `browserslist`:
+Configure `core-js` with the same `browserslist` so only used polyfills are added:
 
 ```json
 {
@@ -372,24 +332,31 @@ Configure `core-js` with the same `browserslist`:
 }
 ```
 
-`useBuiltIns: "usage"` adds only the polyfills the code actually uses. The alternatives (`"entry"`, the global import) are bigger and rarely justified.
+`useBuiltIns: "usage"` adds only the polyfills the code uses; `"entry"` and the global import are bigger and rarely justified.
 
 ### Modern and legacy bundles
 
-The two-bundle pattern (sometimes called differential serving) ships a modern bundle to modern browsers and a transpiled legacy bundle to older ones:
+Differential serving ships a modern bundle to modern browsers and a transpiled legacy bundle to older ones:
 
 ```html
 <script type="module" src="/assets/modern.js"></script>
 <script nomodule src="/assets/legacy.js"></script>
 ```
 
-Pay the build complexity only when the legacy share is over 10 percent of traffic and the modern bundle saves over 20 KB compressed. Below those thresholds, ship one transpiled bundle and move on.
+Pay the two-bundle build complexity only when the legacy share is over 10 percent of traffic and the modern bundle saves over 20 KB compressed. Below those thresholds, ship one transpiled bundle.
 
-Check: production bundle for modern browsers does not include `Array.prototype.flat` polyfill, generator runtime, or async-await transforms. If it does, the `browserslist` is wider than the audience.
+Check: the modern-browser production bundle does not include `Array.prototype.flat` polyfill, generator runtime, or async-await transforms. If it does, `browserslist` is wider than the audience.
 
-## See also
+## Build Plumbing (Footnote)
 
-- [performance.md](performance.md) for the budget framing, render strategies, and the asset-loading rules that bundle hygiene feeds.
-- [security.md](security.md) for Subresource Integrity, supply-chain considerations, and dependency vulnerability gates.
-- [observability.md](observability.md) for the hidden source-map upload and the error-tracking pipeline that depends on it.
-- [testing.md](testing.md) for `size-limit` and `bundlesize` gating, lighthouse-ci, and the CI checks that make bundle budgets auditable.
+Not bundle hygiene proper, but it breaks builds:
+
+- Exclude tool output directories (audit scratch dir, screenshot dumps, generated reports) from the dev/preview file watcher; otherwise the watcher loops on its own output and the preview server thrashes.
+- Date-shard or namespace generated audit artifacts so runs do not overwrite each other.
+
+## See Also
+
+- [performance.md](performance.md): budget framing, render strategies, and the asset-loading rules bundle hygiene feeds.
+- [security.md](security.md): Subresource Integrity, supply-chain, and dependency vulnerability gates.
+- [observability.md](observability.md): hidden source-map upload and the error-tracking pipeline that depends on it.
+- [testing.md](testing.md): `size-limit`, `bundlesize`, lighthouse-ci, and the CI checks that make budgets auditable.

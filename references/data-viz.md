@@ -1,32 +1,32 @@
 ---
 title: Data Visualization
-purpose: Chart selection, axes, color, accessibility for charts and tables, Canvas vs SVG vs WebGL rubric, timezone and DST handling, annotations, streaming chart performance, geographic projections.
+purpose: Chart selection, axes, color, accessibility for charts and tables, Canvas vs SVG vs WebGL rubric, timezone and DST handling, annotations, streaming chart performance, geographic projections. Every rule pairs a principle with a concrete threshold.
 load-when:
-  task-keywords: [chart, data viz, axis, legend, colorblind, Canvas, SVG, WebGL, timezone, DST]
+  task-keywords: [chart, data viz, axis, legend, colorblind, Canvas, SVG, WebGL, timezone, DST, accessibility, responsive]
   symptoms: [contrast fail, slow page, slow interaction]
 prereq: SKILL.md
 related: [accessibility.md, responsive.md, motion.md, performance.md]
-size: ~555 lines
+size: ~512 lines
 ---
 
 # Data Visualization
 
-Framework-agnostic guidance on charts, tables, and data-dense interfaces. Library-agnostic; the same principles apply to D3, Chart.js, Recharts, ECharts, Highcharts, Vega-Lite, and others.
+Library-agnostic guidance on charts, tables, and data-dense interfaces.
 
 ## The Hierarchy of Data Display
 
-When showing data, walk this list. The first that fits is the right choice.
+Walk this list; the first that fits is the right choice. If a chart and a table or summary number both work, use the simpler thing.
 
-1. **One number with context.** "$48,231 monthly recurring revenue" beats a chart with one data point.
-2. **Comparison or ranking** (top 5, top 10). A list with bars beats a pie chart.
-3. **Trend over time.** A line chart.
-4. **Distribution.** Histogram, box plot.
-5. **Composition.** Stacked bar, treemap.
-6. **Relationship between two variables.** Scatter plot.
-7. **Geographic.** Map.
-8. **Detailed records.** Table.
-
-If you reach for a chart and a table or summary number works, use the simpler thing.
+| Need | Display |
+|------|---------|
+| One number with context | One number, e.g. "$48,231 monthly recurring revenue", over a one-point chart |
+| Comparison or ranking (top 5, top 10) | List with bars (beats a pie chart) |
+| Trend over time | Line chart |
+| Distribution | Histogram or box plot |
+| Composition | Stacked bar or treemap |
+| Relationship between two variables | Scatter plot |
+| Geographic | Map |
+| Detailed records | Table |
 
 ## Choosing the Right Chart
 
@@ -34,7 +34,7 @@ If you reach for a chart and a table or summary number works, use the simpler th
 |------|-----------|-------|
 | Single value | Stat card with sparkline | Chart |
 | Trend over time | Line chart | Pie chart |
-| Compare 2-10 categories | Bar chart (horizontal if labels long) | Pie chart |
+| Compare 2-10 categories | Bar (horizontal if labels long) | Pie chart |
 | Compare 10-30 categories | Horizontal bar | Vertical bar (cramped on mobile) |
 | Compare > 30 categories | Top N + "Other" or table | Bar chart with all |
 | Composition (parts of whole, 2-5 categories) | Pie or donut | Pie with > 5 |
@@ -47,68 +47,65 @@ If you reach for a chart and a table or summary number works, use the simpler th
 | Funnel (sequential drop-off) | Funnel chart | Bar chart |
 | Network / relationships | Graph / network diagram | Table |
 
-### Pie/donut rules
+### Pie / donut rules
 
-- Maximum 5 categories. Beyond that, switch to bar.
-- Sum to 100%.
+- Maximum 5 categories; beyond that, switch to bar.
+- Slices sum to 100%.
 - Order by size (largest first, clockwise from 12 o'clock).
 - Direct-label slices when space allows; legend if not.
-- Don't 3D pie. Ever.
+- Never 3D pie.
 - Don't compare two pies side by side; use a stacked bar.
 
 ### Bar chart rules
 
-- Bar baseline at zero. Always.
+- Bar baseline at zero, always.
 - Vertical bars for short labels, horizontal for long.
-- Order by value (descending) unless there's a natural order (months, ranks).
+- Order by value (descending) unless there is a natural order (months, ranks).
 - Spacing between bars: about 30-40% of bar width.
-- Categorical x-axis on horizontal; numerical on vertical.
+- Categorical x-axis on horizontal bars; numerical on vertical bars.
 
 ### Line chart rules
 
 - Time on the x-axis.
-- Multiple lines: maximum 5 before they tangle.
+- Maximum 5 lines before they tangle.
 - Distinct color or dash pattern per line.
 - Direct-label lines at the right end where space allows.
 - Connect data points; don't put markers on every point unless you want emphasis.
 
 ## Axes
 
-### Labels
+### Labels and ticks
 
 - Always label both axes.
-- Include units in the axis label or as a suffix on tick labels ("$", "%", "ms").
-- Don't rotate labels 90 degrees on horizontal bars; just go horizontal-bar layout.
+- Include units in the axis label or as a tick-label suffix ("$", "%", "ms").
+- Don't rotate labels 90 degrees on horizontal bars; use horizontal-bar layout instead.
 - Auto-skip labels when they overlap (every other, or larger interval).
-
-### Ticks
-
-- Use round numbers (10, 20, 50, 100), not 7, 23, 47.
+- Use round tick numbers (10, 20, 50, 100), not 7, 23, 47.
 - 4-7 ticks per axis is usually right.
-- Y-axis baseline at zero for bar charts. Truncating the y-axis exaggerates differences.
+- Y-axis baseline at zero for bar charts; truncating exaggerates differences.
 - For dramatic small variations, add a "broken axis" indicator (zigzag) to be honest about it.
 
-### Time axis
+### Time axis granularity
 
-- Match granularity to the time range:
-  - < 1 day: hours
-  - 1-30 days: days
-  - 1-12 months: weeks or months
-  - 1-5 years: months or quarters
-  - > 5 years: years
+| Range | Granularity |
+|-------|-------------|
+| < 1 day | hours |
+| 1-30 days | days |
+| 1-12 months | weeks or months |
+| 1-5 years | months or quarters |
+| > 5 years | years |
+
 - Allow user to change granularity (day/week/month).
 - Show the date format consistent with the user's locale.
 
-#### Timezone and DST handling
+### Timezone and DST handling
 
-Time-series charts get timezone wrong more often than any other single thing. The discipline:
-
-- **Store every timestamp in UTC.** Server, database, transport layer, JSON payload, log line, exported CSV: all UTC. A timestamp without a timezone is a defect; a timestamp in "local server time" is a worse defect.
-- **Display in the user's local timezone.** Use the browser's `Intl.DateTimeFormat` with `timeZone` defaulting to the user's `Intl.DateTimeFormat().resolvedOptions().timeZone`. For dashboards where the timezone is meaningful (operations, finance), expose a timezone picker and persist the choice.
-- **Use ISO 8601 with a timezone offset.** `2026-03-08T07:00:00Z` (UTC) or `2026-03-08T02:00:00-05:00` (with offset) parses unambiguously in every runtime. `2026-03-08 02:00:00` (no offset) silently falls back to the local timezone, which is the local timezone of WHICHEVER MACHINE PARSES IT. That is how a server-generated timestamp ends up displayed three hours off.
-- **DST creates the "missing hour" gap.** In the US, on the spring-forward Sunday, the clock jumps from `01:59:59` to `03:00:00` local time. A bar chart bucketed by local hour has an empty `02:00` bucket. A line chart with hourly ticks shows a gap. Two strategies: bucket by UTC and label by local (the bucket boundaries are even; the labels show the jump), or bucket by local and explicitly draw the DST transition as a vertical reference line so users see why the chart looks unusual.
-- **The "extra hour" gap is the reverse.** Fall-back day has 25 hours, with `01:00` to `02:00` happening twice. Sum-by-day operations double-count that hour. Always sum from UTC.
-- **Axis ticks across DST boundaries.** A "every 6 hours" tick on a UTC-bucketed local-labelled axis lands at unfamiliar wall-clock times across DST. A "every 6 hours local" tick on a UTC axis lands at uneven UTC offsets. Pick the one that matches the user's mental model (operations: UTC ticks; analytics: local ticks).
+- Store every timestamp in UTC across server, database, transport layer, JSON payload, log line, and exported CSV. A timestamp without a timezone is a defect.
+- Display in the user's local timezone using `Intl.DateTimeFormat` with `timeZone` defaulting to `Intl.DateTimeFormat().resolvedOptions().timeZone`. For meaningful dashboards (operations, finance), expose a timezone picker and persist the choice.
+- Use ISO 8601 with a timezone offset: `2026-03-08T07:00:00Z` (UTC) or `2026-03-08T02:00:00-05:00` (with offset). `2026-03-08 02:00:00` (no offset) silently falls back to the parsing machine's local timezone, which is how a server timestamp displays hours off.
+- DST spring-forward jumps the clock from `01:59:59` to `03:00:00` local, leaving an empty `02:00` bucket. Bucket by UTC and label by local, or bucket by local and draw the DST transition as a vertical reference line.
+- DST fall-back day has 25 hours with `01:00` to `02:00` happening twice; sum-by-day double-counts that hour, so always sum from UTC.
+- Across DST boundaries, choose UTC ticks for operations or local ticks for analytics to match the user's mental model.
 
 ### Number formatting
 
@@ -119,39 +116,36 @@ Time-series charts get timezone wrong more often than any other single thing. Th
 
 ## Color in Charts
 
-### Single series
+| Encoding | Palette |
+|----------|---------|
+| Single series | Brand primary or a single neutral |
+| Sequential (ordered, low to high) | Single hue light to dark, perceptually uniform scale (viridis, magma) |
+| Diverging (centered, positive vs negative) | Two-hue diverging palette (blue-white-red) |
+| Categorical (no order) | Qualitative palette, distinct hues, colorblind-safe |
 
-- Use the brand primary or a single neutral.
 - Add a slight gradient (top to bottom) only on filled area charts; never on bar charts (looks gimmicky).
-
-### Multiple series
-
-- Sequential (ordered, e.g., low to high values): single hue, light to dark. Use a perceptually uniform scale (viridis, magma).
-- Diverging (centered, e.g., positive vs negative): two-hue diverging palette (blue-white-red).
-- Categorical (no order, e.g., Series A vs Series B vs Series C): qualitative palette, distinct hues. Use a colorblind-safe palette.
 
 ### Colorblind-safe palettes
 
-Avoid red/green pairs alone. Use:
-
+- Avoid red/green pairs alone.
 - Tol's "bright" palette: blue, red, green, yellow, cyan, purple, gray (distinguishable in most colorblind types).
 - ColorBrewer's "Set2" or "Dark2".
 - Always supplement color with shape/pattern/label so meaning isn't lost.
 
 ### Pattern alongside color
 
-For stacked bars or pies, use a subtle hatching/dot pattern in addition to color. Color carries the primary signal, pattern carries redundancy:
+For stacked bars or pies, color carries the primary signal and a subtle hatching/dot pattern carries redundancy:
 
 ```css
 .series-a { fill: var(--color-1); }
 .series-b { fill: var(--color-2); background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.1) 4px, rgba(0,0,0,0.1) 8px); }
 ```
 
-### Contrast against background
+### Contrast
 
-Data marks (bars, lines) need at least 3:1 contrast against the chart background. Text labels need 4.5:1.
-
-In dark mode, lighten the data marks. Don't just keep light-mode colors.
+- Data marks (bars, lines): at least 3:1 against the chart background.
+- Text labels: 4.5:1 against the chart background.
+- In dark mode, lighten the data marks; don't just keep light-mode colors.
 
 ## Legends
 
@@ -159,15 +153,18 @@ In dark mode, lighten the data marks. Don't just keep light-mode colors.
 - Place near the chart, not detached below a scroll fold.
 - Order matches data (largest to smallest, or alphabetical).
 - For interactive charts, legends are clickable to toggle series visibility.
-- Direct labeling (label at the line/bar) often beats a separate legend.
+- Direct labeling (at the line/bar) often beats a separate legend.
 
 ## Tooltips
 
 - Show on hover (desktop) or tap (mobile).
-- Show the exact value (numeric labels are too small for crowded charts; tooltips fill in).
+- Show the exact value (numeric labels are too small for crowded charts).
 - Label which series, the x value, and the y value.
 - Anchor near the cursor; don't make the user scan.
-- Persist long enough to read (don't dismiss on tiny mouse movement).
+- Persist long enough to read; don't dismiss on tiny mouse movement.
+- Content must be reachable via keyboard (focus on data point reveals tooltip).
+
+Content format: x-axis label header, then per-series lines:
 
 ```
 [X-axis label, e.g., March 12]
@@ -175,63 +172,49 @@ Series A: 12,400 (+18%)
 Series B:  8,200 (-3%)
 ```
 
-For accessibility, tooltip content must be reachable via keyboard (focus on data point reveals tooltip).
-
 ## Direct Labeling
 
-For small datasets, label values directly on the chart instead of forcing the eye to travel to an axis:
+For small datasets, label values directly instead of forcing the eye to the axis:
 
-- Bar chart with 3-5 bars: put the value on or above each bar.
-- Line chart: put the value at the rightmost point of each line.
-- Pie chart: put values inside slices (or outside with a leader line if too small).
+- Bar chart with 3-5 bars: value on or above each bar.
+- Line chart: value at the rightmost point of each line.
+- Pie chart: values inside slices (or outside with a leader line if too small).
 
 ## Annotations and Reference Lines
 
-Charts that show context (a target, a threshold, a deploy event, an anomaly) tell a story; raw data alone often does not. Five annotation types and how to layer each:
+Layering rule: data marks always on top, annotations behind, except labels which sit above data marks to stay readable. Annotations carry a 3:1 contrast budget against the chart background and a color distinct from any data series color (a target line in the same color as a data series is a defect). Build annotations from a structured list (source of truth) so the chart and the data pipeline can never disagree.
 
-- **Threshold bands.** A shaded horizontal region marking the acceptable range (SLA 99 to 100 percent, page load good zone 0 to 2.5s). Drawn as a low-opacity `<rect>` BEHIND the data marks. Label the band, not just the boundary.
-- **Target lines.** A single horizontal reference line showing the goal. Dashed, distinct color, label at the right end ("Target: 250ms"). The line sits BEHIND the data marks; the label sits ABOVE or to the side so it never overlaps.
-- **Deploy or event markers.** Vertical lines at meaningful x-values (a deploy, a campaign launch, an incident). Color and dash pattern differ from data lines. Label rotated 90 degrees along the line OR a small icon at the top with a tooltip on hover.
-- **Anomaly callouts.** A circle plus arrow plus short text pointing at a specific data point ("Spike: payment system outage"). Visible from the static chart; tooltip on hover for the full story.
-- **Range brackets.** A horizontal bracket spanning an x-axis range (a period of degraded performance, a holiday season). Label at the top of the bracket.
-
-Layering rule: data marks always on top; annotations behind. The exception is labels, which sit above data marks to stay readable. Annotations carry their own contrast budget (3:1 against the chart background) and their own color budget (distinct from any data series color). A target line that uses the same color as a data series is a defect; the eye reads them as one.
-
-Build annotations from a structured list (source of truth) so the chart and the underlying data pipeline can never disagree.
+| Type | How |
+|------|-----|
+| Threshold bands | Shaded horizontal region (SLA 99 to 100 percent, page load good zone 0 to 2.5s) as a low-opacity `<rect>` behind the data marks; label the band, not just the boundary |
+| Target lines | Single dashed horizontal reference line, distinct color, label at the right end ("Target: 250ms"); line behind data marks, label above or to the side |
+| Deploy / event markers | Vertical lines at meaningful x-values, color/dash differing from data lines; label rotated 90 degrees along the line or a small icon at top with hover tooltip |
+| Anomaly callouts | Circle plus arrow plus short text at a specific point ("Spike: payment system outage"); visible in the static chart, hover tooltip for the full story |
+| Range brackets | Horizontal bracket spanning an x-axis range, label at the top of the bracket |
 
 ## Maps and Geographic Projections
 
-Every flat map of a round Earth distorts something. The choice of projection determines what is distorted and how badly. The defect: shipping a Mercator world map for a statistical comparison and accidentally making Greenland look bigger than Africa.
+Every flat map distorts something. The defect: a Mercator world map for a statistical comparison, accidentally making Greenland look bigger than Africa. Name the projection in code (`d3.geoEqualEarth()`, not "the default projection"); the default in most libraries is Mercator, which is rarely what a statistical chart wants.
 
-- **Mercator.** Preserves shape and direction; massively inflates area at high latitudes (Greenland appears the size of Africa; Russia looks larger than the entire African continent). Use ONLY for street maps and navigation, where shape and direction are the question. Never for statistical comparisons across latitudes.
-- **Equal Earth.** Preserves area; mild shape distortion. The modern default for world-scale choropleths and heatmaps. Designed in 2018 specifically for statistical maps.
-- **Albers Equal Area.** Preserves area; designed for a specific region (Albers USA, Albers Europe). The standard projection for US state-level and country-level statistical maps. Comes pre-tuned in most viz libraries.
-- **Robinson and Winkel Tripel.** Compromise projections that distort everything slightly rather than one thing badly. Robinson is the National Geographic default; Winkel Tripel is now the National Geographic Society default. Use when neither shape nor area is the primary question.
-- **Orthographic.** A view of the Earth as a sphere from a fixed viewpoint. Use for animated globe views or hero illustrations; not for analysis.
-
-Match the projection to the use case: street map, Mercator; statistical world map, Equal Earth; US statistical map, Albers USA; aesthetic globe, Orthographic. Name the projection in code (`d3.geoEqualEarth()`, not "the default projection"); the default in most libraries is Mercator, which is rarely what a statistical chart wants.
+| Projection | Preserves / distorts | Use for |
+|------------|----------------------|---------|
+| Mercator | Preserves shape and direction; inflates area at high latitudes (Greenland appears the size of Africa) | ONLY street maps and navigation; never statistical comparisons across latitudes |
+| Equal Earth | Preserves area; mild shape distortion; designed 2018 for statistical maps | Modern default for world-scale choropleths and heatmaps |
+| Albers Equal Area | Preserves area for a specific region (Albers USA, Albers Europe) | Standard for US state-level and country-level statistical maps |
+| Robinson, Winkel Tripel | Compromise; distort everything slightly (Robinson and Winkel Tripel are National Geographic Society defaults) | When neither shape nor area is the primary question |
+| Orthographic | Earth as a sphere from a fixed viewpoint | Animated globe views or hero illustrations, not analysis |
 
 ## Animation
 
-### Entrance animation
+| Phase | Timing |
+|-------|--------|
+| Entrance: bars rise from baseline | 400-600ms, staggered 30-50ms per bar |
+| Entrance: lines draw left to right | 600-800ms total |
+| Entrance: pies sweep from 12 o'clock clockwise | 800-1000ms |
+| Update: old to new values, ease-out | 300-500ms |
 
-- Bars rise from the baseline, 400-600ms staggered by 30-50ms per bar.
-- Lines draw from left to right, 600-800ms total.
-- Pies sweep from 12 o'clock clockwise, 800-1000ms.
-
-### Update animation
-
-When data changes:
-
-- Animate from old to new values, 300-500ms.
-- Use ease-out.
-- Animate the path's `d` attribute or use a library helper for smooth transitions.
-
-### When to disable
-
-- `prefers-reduced-motion: reduce`: skip entrance animation; show data immediately.
-- Live-updating data views: no animation on every refresh; just update.
-- Print: no animation.
+- On update, animate the path's `d` attribute or use a library helper for smooth transitions.
+- Disable on `prefers-reduced-motion: reduce` (skip entrance, show data immediately), on live-updating views (just update), and on print.
 
 ```js
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -240,12 +223,12 @@ chart.options.animation = reduced ? false : { duration: 600, easing: 'easeOutQua
 
 ## Accessibility
 
+See accessibility.md for full chart and table a11y treatment.
+
 ### Screen readers
 
-Charts are inherently visual. Provide a text alternative:
-
-- Concise summary near the chart describing the key insight (one sentence stating the trend or comparison the chart shows).
-- A data table either inline or in a `<details>` toggle, with the same data the chart shows.
+- Concise summary near the chart describing the key insight in one sentence (the trend or comparison).
+- A data table inline or in a `<details>` toggle, with the same data the chart shows.
 - For complex charts, use `aria-describedby` to link the chart to a longer description.
 
 ```html
@@ -255,7 +238,7 @@ Charts are inherently visual. Provide a text alternative:
     <svg>...</svg>
   </div>
   <p id="chart-summary">
-    One sentence stating the key insight the chart conveys, in plain language, with the headline numbers.
+    One sentence stating the key insight, in plain language, with the headline numbers.
   </p>
   <details>
     <summary>View data table</summary>
@@ -275,29 +258,22 @@ Charts are inherently visual. Provide a text alternative:
 
 ### Touch targets
 
-Interactive chart elements (data points, legend toggles) need at least 44x44 touch area. For dense charts, expand the hit area beyond the visual element:
+Interactive chart elements need at least 44x44 touch area. For dense charts, expand the hit area beyond the visual element. Visible dot 4px, touch target 22px radius (44px diameter):
 
 ```html
 <circle cx="100" cy="50" r="4" />
 <circle cx="100" cy="50" r="22" fill="transparent" pointer-events="all" />
 ```
 
-The visible dot is 4px; the touch target is 22px (44px diameter).
-
 ## Responsive Charts
 
-### Reflow at small widths
-
-Charts must adapt or simplify on small screens:
+See responsive.md for chart reflow patterns.
 
 - Vertical bars become horizontal bars (long labels easier).
 - Multi-line charts collapse to top-N or to small multiples.
 - Pie charts stack labels below.
 - Axis ticks reduce to 3-5 from 7-10.
-
-### Container query
-
-Charts that appear in different layout slots benefit from container queries:
+- For SVG charts, listen to resize and re-render with new dimensions, throttling to 100-200ms.
 
 ```css
 .chart-container { container-type: inline-size; }
@@ -308,38 +284,22 @@ Charts that appear in different layout slots benefit from container queries:
 }
 ```
 
-### Re-render on resize
-
-For SVG-based charts, listen to resize and re-render with new dimensions. Throttle to 100-200ms.
-
 ## Loading and Error States
 
-### Loading
-
-- Show a skeleton or shimmer matching the chart's eventual shape.
-- Don't show a blank axis frame; that looks broken.
-
-### Empty data
-
-- Show a message: "No data for this period yet."
-- Optionally a placeholder chart (greyed out) with the message overlaid.
-- Action: "Try a different range" or "Connect data source".
-
-### Error
-
-- Show an error message with retry: "Couldn't load chart. Retry?"
-- Don't show a broken/clipped chart.
+- Loading: show a skeleton or shimmer matching the chart's eventual shape; don't show a blank axis frame (looks broken).
+- Empty data: show a message ("No data for this period yet."), optionally a greyed-out placeholder chart with the message overlaid, plus an action ("Try a different range" or "Connect data source").
+- Error: show an error message with retry ("Couldn't load chart. Retry?"); don't show a broken/clipped chart.
 
 ## Large Datasets
 
 For 1000+ data points:
 
-- **Aggregate.** Group by hour/day/week to reduce point count.
-- **Sample.** Show every Nth point.
-- **Summarize.** Show the trend; provide drill-down for detail.
-- **Virtualize.** For long tables, only render visible rows.
-- **Server-side processing.** Aggregate on the server; ship summarized data.
-- **Web Workers.** For client-side heavy aggregation, move work off the main thread.
+- Aggregate: group by hour/day/week to reduce point count.
+- Sample: show every Nth point.
+- Summarize: show the trend, provide drill-down for detail.
+- Virtualize: for long tables, only render visible rows.
+- Server-side processing: aggregate on the server, ship summarized data.
+- Web Workers: move client-side heavy aggregation off the main thread.
 
 Anti-pattern: shipping 50,000 points to a `<canvas>` chart and expecting smooth interaction.
 
@@ -349,17 +309,17 @@ Pick the renderer by data-point count first, then by interaction model.
 
 | Renderer | Data point ceiling | Interaction model | Accessibility | Use when |
 |----------|-------------------|------------------|---------------|----------|
-| SVG | About 500 nodes | DOM-native: each mark is an element, click and hover are free | Each `<rect>` or `<circle>` is a DOM node, focusable, screen-reader addressable | Bar charts, small line charts, charts with rich per-mark interaction (tooltip, click-to-drill, focus-to-announce), charts that need to be inspectable in DevTools |
-| Canvas | About 100,000 points | Pixel-based: hit-testing requires a hit-region map or a quadtree; no DOM cost | Inherently inaccessible; pair with a `<table>` fallback or a `role="img"` plus `aria-label` summary | Time-series with thousands of points, scatter plots with dense clouds, heatmaps |
-| WebGL | Above 100,000 points or when shaders are needed | Pixel-based, GPU-accelerated; same hit-testing problem as Canvas plus GPU memory budget | Same accessibility problem as Canvas; same fallback story | Million-point scatter, real-time streaming dashboards with many series, anything that needs per-mark shading (instanced rendering, density estimation) |
+| SVG | About 500 nodes | DOM-native: each mark is an element, click and hover are free | Each `<rect>` or `<circle>` is a DOM node, focusable, screen-reader addressable | Bar charts, small line charts, rich per-mark interaction (tooltip, click-to-drill, focus-to-announce), DevTools-inspectable |
+| Canvas | About 100,000 points | Pixel-based: hit-testing needs a hit-region map or quadtree; no DOM cost | Inherently inaccessible; pair with a `<table>` fallback or `role="img"` plus `aria-label` summary | Time-series with thousands of points, dense scatter clouds, heatmaps |
+| WebGL | Above 100,000 points or when shaders are needed | Pixel-based, GPU-accelerated; same hit-testing problem as Canvas plus GPU memory budget | Same problem and fallback as Canvas | Million-point scatter, real-time streaming dashboards with many series, per-mark shading (instanced rendering, density estimation) |
 
 Rule of thumb:
 
-- **Under 500 marks: SVG.** The DOM tax is negligible, interaction is free, accessibility is best.
-- **500 to 100,000 marks: Canvas.** SVG starts dropping frames at hover; Canvas stays smooth. Add a quadtree for hover hit-testing.
-- **Above 100,000 marks or shader effects: WebGL.** Use a library that handles the WebGL boilerplate (deck.gl, regl-based wrappers). Expect to write your own picking pipeline.
+- Under 500 marks: SVG. DOM tax negligible, interaction free, accessibility best.
+- 500 to 100,000 marks: Canvas (SVG drops frames at hover). Add a quadtree for hover hit-testing.
+- Above 100,000 marks or shader effects: WebGL via a library that handles the boilerplate (deck.gl, regl-based wrappers); expect to write your own picking pipeline.
 
-Hybrid is common: render the data layer in Canvas or WebGL for speed, render the axes, legends, and overlay annotations in SVG on top so they are accessible. The two layers share a coordinate system.
+Hybrid: render the data layer in Canvas or WebGL for speed, render axes, legends, and overlay annotations in SVG on top so they stay accessible; both layers share a coordinate system.
 
 ## Tables
 
@@ -394,7 +354,7 @@ Hybrid is common: render the data layer in Canvas or WebGL for speed, render the
 
 - Tabular figures (`font-variant-numeric: tabular-nums`) for numeric columns.
 - Right-align numbers, left-align text, center-align symbols/icons.
-- Subtle row dividers (low-contrast borders) rather than alternating row colors. Alternating colors look dated and reduce readability.
+- Subtle low-contrast row dividers rather than alternating row colors (which look dated and reduce readability).
 - Sticky header for long tables (`position: sticky` on `<thead>`).
 - Hover state on rows for navigability.
 
@@ -407,30 +367,30 @@ Hybrid is common: render the data layer in Canvas or WebGL for speed, render the
 
 ### Filtering
 
-- Per-column filters: dropdown, search, range slider depending on data type.
+- Per-column filters: dropdown, search, or range slider depending on data type.
 - Active filters visible as chips above the table.
 - "Clear all" link.
 
 ### Selection
 
 - Checkbox per row.
-- Select-all checkbox in the header (with indeterminate state for partial selection).
+- Select-all checkbox in the header with an indeterminate state for partial selection.
 - Show count of selected rows.
 - Bulk actions appear when rows selected.
 
 ### Pagination vs infinite scroll
 
-- **Pagination** for tables: predictable, accessible, supports deep linking.
-- **Infinite scroll** for activity feeds: low-stakes, sequential reading.
+- Pagination for tables: predictable, accessible, supports deep linking.
+- Infinite scroll for activity feeds: low-stakes, sequential reading.
 - Don't mix.
 
 ### Mobile tables
 
 For wide tables on small screens:
 
-- **Horizontal scroll** with sticky first column (the row identifier).
-- **Card view**: each row becomes a card, fields as label/value pairs.
-- **Collapse**: show a few key columns, expand row to see all.
+- Horizontal scroll with sticky first column (the row identifier).
+- Card view: each row becomes a card, fields as label/value pairs.
+- Collapse: show a few key columns, expand row to see all.
 
 ```css
 .table-scroll {
@@ -445,7 +405,7 @@ For wide tables on small screens:
 
 ## Stat Cards / KPI Tiles
 
-For data summaries, the most important number gets a stat card:
+The most important number gets a stat card. Anatomy and order:
 
 ```
 [ Stat Card ]
@@ -455,12 +415,10 @@ For data summaries, the most important number gets a stat card:
 [ Sparkline: subtle line chart of recent history ]
 ```
 
-Rules:
-
 - Label first (small, muted).
 - Value largest (display type).
-- Change indicator with direction icon and color (green up, red down). Pair with text so color isn't the only signal.
-- Optional sparkline. Subtle (single neutral color), no axis.
+- Change indicator with direction icon and color (green up, red down), paired with text so color isn't the only signal.
+- Optional sparkline: subtle (single neutral color), no axis.
 - Optional click affordance to drill down.
 
 ## Real-Time Updates
@@ -468,15 +426,15 @@ Rules:
 For live-updating data:
 
 - Update without animation (or very subtle pulse on changed values).
-- Don't shift other content. New rows arrive at the top with a brief highlight.
+- Don't shift other content; new rows arrive at the top with a brief highlight.
 - Allow pause/resume so users can read without flicker.
-- Show last-updated timestamp.
+- Show a last-updated timestamp.
 
 ### Streamed chart performance
 
-A chart that receives 100 messages a second from a WebSocket and re-renders on every message will pin the main thread and stutter. Four techniques to keep the chart smooth at high stream rates:
+Four composing techniques keep a chart smooth at high stream rates: rAF-coalesce caps the render rate, ring buffers cap the data size, OffscreenCanvas moves the work off-main-thread, visibility-driven throttling drops to background-rate.
 
-- **rAF-coalesce updates.** Buffer incoming events; redraw once per `requestAnimationFrame`. The screen refreshes at 60 Hz (or 120 Hz on high-refresh displays); rendering faster than that wastes CPU and creates jank. Per frame: drain the buffer, push points into the data structure, redraw once.
+- rAF-coalesce updates: buffer incoming events, redraw once per `requestAnimationFrame`, since the screen refreshes at 60 Hz (or 120 Hz on high-refresh displays) and rendering faster wastes CPU.
 
   ```js
   let pending = [];
@@ -498,11 +456,9 @@ A chart that receives 100 messages a second from a WebSocket and re-renders on e
   }
   ```
 
-- **Ring buffers for fixed-size sliding windows.** A live chart shows the last N seconds or last N points. Use a ring buffer (a fixed-size array with a head pointer) so the data structure does not grow unbounded. Old points fall off the back as new points push on the front; the chart re-renders from the buffer's current view.
-- **Off-screen Canvas via OffscreenCanvas plus transfer to main.** Move the rendering work to a Web Worker. The worker holds an `OffscreenCanvas`, draws into it, and the main thread composites the result. The main thread stays responsive for user input (panning, hovering, clicking the pause button) even while data arrives at full rate.
-- **Cap update rate to display refresh.** If the data rate is 1000 messages a second and the display is 60 Hz, render at 60 Hz; throttle further (30 Hz, 15 Hz) when the chart is off-screen, in a background tab (`document.visibilityState === 'hidden'`), or when the user is interacting with a different region.
-
-The four techniques compose: rAF-coalesce caps the render rate, ring buffers cap the data size, OffscreenCanvas moves the work off-main-thread, visibility-driven throttling drops to background-rate.
+- Ring buffers for fixed-size sliding windows: a fixed-size array with a head pointer so the data structure does not grow unbounded; old points fall off the back as new push on the front.
+- OffscreenCanvas plus transfer to main: move rendering to a Web Worker holding an `OffscreenCanvas`, composite the result on the main thread so it stays responsive for input.
+- Cap update rate to display refresh: render at 60 Hz even at 1000 messages/second; throttle further (30 Hz, 15 Hz) when off-screen, in a background tab (`document.visibilityState === 'hidden'`), or when the user interacts elsewhere.
 
 ## Common Data Viz Mistakes
 
@@ -512,7 +468,7 @@ The four techniques compose: rAF-coalesce caps the render rate, ring buffers cap
 - 3D charts.
 - Tooltip showing only a value with no series/x-axis context.
 - Color-only encoding (red good / red bad without text or icon).
-- Chart that's a bar chart on desktop and a different chart entirely on mobile (jarring).
+- Chart that is a bar chart on desktop and a different chart entirely on mobile (jarring).
 - Chart with no axis labels.
 - Chart with no units.
 - Chart that loads with a flicker (no skeleton, then sudden content).
@@ -553,3 +509,4 @@ Before declaring work complete:
 - [accessibility.md](accessibility.md) for chart and table accessibility
 - [responsive.md](responsive.md) for chart reflow patterns
 - [motion.md](motion.md) for chart animation
+- [performance.md](performance.md) for streaming and large-dataset budgets

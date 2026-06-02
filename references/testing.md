@@ -1,54 +1,55 @@
 ---
 title: Frontend Testing Discipline
-purpose: Pre-merge gate discipline. The frontend test pyramid, visual regression, accessibility automation, perf budgets in CI, type-only check gates, contract tests, lighthouse-ci wiring. The pre-merge counterpart to audit-workflow.md's post-build polish loop.
+purpose: The pre-merge gate. Frontend test pyramid, visual regression, accessibility automation, performance budgets, type and lint gates, contract tests, and lighthouse-ci wiring kept hermetic. The pre-merge counterpart to the post-build polish loop.
 load-when:
-  task-keywords: [testing, visual regression, axe-core, pa11y, size-limit, bundlesize, lighthouse-ci, contract test, type check, gate, verification, CI]
+  task-keywords: [testing, visual regression, axe-core, pa11y, size-limit, bundlesize, lighthouse-ci, contract test, type check, hermetic gate, verification, gate]
   symptoms: [score dropped, bundle size grew, contrast fail, focus not visible, hydration mismatch]
 prereq: SKILL.md
 related: [lighthouse.md, observability.md, pre-launch.md, audit-workflow.md]
-size: ~500 lines
+size: ~302 lines
 ---
 
 # Frontend Testing Discipline
 
-Tests are the pre-merge gate. Audit-workflow is the post-build polish loop. Both run, neither replaces the other. This file is the gate: what to test, how to budget the categories, and how to wire the CI so a red gate blocks the merge instead of the deploy.
+Tests are the pre-merge gate: what to test, how to budget the categories, how to wire CI so a red gate blocks the merge instead of the deploy. Audit-workflow is the post-build polish loop. Both run; neither replaces the other.
 
-Framework-agnostic. Patterns described at the standard level (snapshot diffing, accessibility tree validation, bundle size assertion). Runner names appear only as concrete examples of tools that implement the pattern.
+Patterns are stated at the standard level (snapshot diffing, accessibility-tree validation, bundle-size assertion). Tool names appear only as concrete implementations of a pattern.
 
 ## The Frontend Test Pyramid
 
-Five categories. Each catches a different class of regression. Budget the count per category; spend the budget on the highest-leverage tests in each.
+Five categories. Each catches a different regression class. Budget the count per category; spend it on the highest-leverage tests. Add a test at the lowest level that catches the regression class: unit is cheap, end-to-end is slow, flaky, and expensive to maintain.
 
-| Category | Scope | Typical count | What it catches |
-|----------|-------|---------------|-----------------|
+| Category | Scope | Typical count | Catches |
+|----------|-------|---------------|---------|
 | Unit | Pure functions, hooks, utilities | Hundreds | Logic regressions, edge cases, refactor breakage |
 | Integration | A component plus its immediate collaborators | Dozens to low hundreds | Wiring bugs, prop contracts, state flow |
 | Visual | Rendered component or page at fixed viewport | Dozens per surface | Style drift, layout regression, theme breakage |
-| End-to-end | Full app, real browser, scripted user flow | Single digits to low dozens per surface | Cross-surface flows, real-browser quirks, integration with auth, payment, etc. |
+| End-to-end | Full app, real browser, scripted user flow | Single digits to low dozens per surface | Cross-surface flows, real-browser quirks, integration with auth/payment |
 | Contract | API request and response shape | One per consumed endpoint | Backend drift, schema breakage, type-only safety |
 
-The pyramid is a budget shape. Unit tests are cheap to run and cheap to write. End-to-end tests are slow and flaky and expensive to maintain. Add tests at the lowest level that catches the regression class.
+- Unit catches what integration mocks pass over: pure-function correctness, sub-second feedback on save.
+- Integration catches "the form submits but validation passes when it should fail" wiring bugs unit tests miss.
+- Visual catches a shared-token shift that moves a button or drifts a dark-mode background: what unit tests cannot see.
+- End-to-end catches surface integration (a flow ending at a 500, a button disabled by an unexpected API shape), not component logic.
+- Contract catches a backend field rename deterministically, where mocks still pass and end-to-end caught it only flakily.
 
-### What each catches
-
-- **Unit.** Pure-function correctness. A change to the price formatter breaks the test. Run on every save. Sub-second feedback.
-- **Integration.** A form component plus its validation library plus its state store. Catches "the form submits but the validation passes when it should fail" class bugs that pure-unit tests miss.
-- **Visual.** The button moved 3 pixels because someone changed a shared spacing token. The dark-mode background drifted because a CSS variable was reassigned. Catches what unit tests cannot see.
-- **End-to-end.** The login flow ends at a 500. The checkout button is disabled because a real API call returned an unexpected shape. Catches surface integration, not component logic.
-- **Contract.** The backend changed a field name. Unit and integration mocks still pass. End-to-end caught it but flakily. Contract test caught it deterministically.
-
-Check: every PR touches at least one test. The test category matches the change category (component edit changes a visual test; logic edit changes a unit or integration test). PR review questions a change that adds production code without a test.
+Check: every PR touches at least one test, and the test category matches the change category (component edit -> visual test; logic edit -> unit or integration test). PR review questions any change that adds production code without a test.
 
 ## Visual Regression Testing
 
-The visual category is the one most teams skip and most regressions slip through. Three tools, each with a different tradeoff.
+The category most teams skip and most regressions slip through. Pick the tool by tradeoff; the checks below hold across all of them.
 
-### Playwright snapshots (toHaveScreenshot)
+| Approach | How it stores baselines | Strength | Weakness |
+|----------|-------------------------|----------|----------|
+| Headless-browser screenshot diff | PNG baseline committed in git | Zero extra infrastructure, fast feedback | Binary diffs in PRs; OS font rendering drift |
+| Git-aware history service | Cloud object storage keyed by git ref | No git bloat, always diffs the actual base, posts side-by-side PR comment | Needs a storage bucket and CI credentials |
+| Hosted story-snapshot service (Storybook stories) | Hosted, per story per variant | Auto fan-out across viewport/theme/locale, purpose-built diff review, one-click accept | Hosting cost, story-maintenance coupling |
+| Raw pixel matcher | Caller-managed (two PNGs in, diff PNG + count out) | Models one-off pipelines (generated chart, server-rendered email) others cannot | Lowest level, you build the harness |
 
-Built into Playwright. Captures a PNG at a fixed viewport, diffs against a committed baseline, fails the test when the pixel diff exceeds a threshold.
+Worked example. Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent):
 
 ```js
-import { test, expect } from '@playwright/test';
+import { test, expect } from '<headless-browser-runner>';
 
 test('homepage hero', async ({ page }) => {
   await page.goto('/');
@@ -61,89 +62,50 @@ test('homepage hero', async ({ page }) => {
 });
 ```
 
-Three things this gets right:
+- Mask volatile regions: timestamps, animated avatars, ad slots. Masked regions are filled with a solid color before diffing.
+- Pin the viewport per project, defaulting to 1280x720 desktop and 375x667 mobile; add others when a surface has a breakpoint at risk.
+- Set both `threshold` (per-pixel color tolerance) and `maxDiffPixelRatio` (total-pixel tolerance), tuned per surface, never one global value.
+- Run visual tests in a containerised CI environment with a pinned OS image; OS font rendering differs, so CI and local otherwise disagree.
+- Review baselines in PRs by inspecting the diff PNG written alongside the failure.
 
-1. **Mask volatile regions.** Timestamps, animated avatars, ad slots: anything that legitimately varies. Masked regions are filled with a solid color before diffing.
-2. **Viewport pin.** Set `use.viewport` per project so the snapshot is reproducible. Default to 1280x720 desktop and 375x667 mobile; add others when a surface has a known breakpoint at risk.
-3. **Threshold tuning.** `threshold` is per-pixel color tolerance. `maxDiffPixelRatio` is total-pixel tolerance. Set both. Tune per surface; do not use one global value.
-
-Strengths: zero extra infrastructure, baseline in git, fast feedback. Weaknesses: baseline-on-git means binary diffs in PRs, and font rendering differs across OS, so CI and local runs disagree unless you pin the OS (Playwright's docker image).
-
-Check: visual tests run in a containerised CI environment with a pinned OS image. Baselines are reviewed in PRs (look at the diff PNG that Playwright writes alongside the failure).
-
-### reg-suit (git-aware history)
-
-reg-suit is open source. It stores baselines in cloud storage (S3, GCS) keyed by git ref. Each PR builds its snapshots, fetches the base-branch baseline, diffs, posts the result as a PR comment with side-by-side images.
-
-Strengths: snapshots live outside git (no binary bloat), history-aware (always diffs against the actual base, not a stale commit), PR comments give reviewers a visual diff link.
-
-Weaknesses: requires a cloud storage bucket and credentials in CI.
-
-### Chromatic (hosted, design-system focus)
-
-Chromatic is a hosted service from the Storybook team. Built around component stories: every story gets a snapshot per relevant variant (viewport, theme, locale).
-
-Strengths: best fit for design-system maintenance, fan-out across variants is automatic, PR review UI is purpose-built for visual diffs, change-acceptance is a click.
-
-Weaknesses: hosted (cost, vendor coupling), Storybook coupling (your team has to maintain stories for everything you want diffed).
-
-### pixelmatch (raw)
-
-The lowest-level option. Two PNGs in, a diff PNG and a count out. Use when you need a one-off custom pipeline (a screenshot of a generated chart, a server-rendered email) that the higher-level tools cannot model.
-
-Check: every customer-facing surface has at least one visual test. New surfaces get a visual test in the same PR that ships them. Visual diffs are reviewed by a human before the baseline updates.
+Check: every customer-facing surface has at least one visual test; new surfaces get one in the same PR that ships them; a human reviews the diff before the baseline updates.
 
 ## Accessibility Automation in CI
 
-Accessibility lint catches the mechanical violations. It does not replace a manual screen-reader pass; it raises the floor.
+Lint catches the mechanical violations (about 30 percent of WCAG); it raises the floor, it does not replace a manual screen-reader pass.
 
-### @axe-core/playwright
+Worked example (axe-core in a headless browser). Run from a headless browser of your choice (Puppeteer, Playwright, or equivalent):
 
 ```js
-import { test, expect } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import { test, expect } from '<headless-browser-runner>';
+import AxeBuilder from '<axe-core-binding>';
 
 test('homepage a11y', async ({ page }) => {
   await page.goto('/');
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
-    .disableRules(['color-contrast'])  // only if your design system has documented overrides
+    .disableRules(['color-contrast'])  // only with a documented design-system override
     .analyze();
   expect(results.violations).toEqual([]);
 });
 ```
 
-Run on every route in CI. Fail the build on any violation. Disable rules only with a documented reason and a tracked issue.
+- Run axe on every route in CI; fail the build on any violation. Disable a rule only with a documented reason and a tracked issue.
+- axe catches: missing alt text, missing form labels, duplicate ids, ARIA mismatches, contrast under 4.5:1 (when not disabled), `<html>` without `lang`, headings out of order, missing landmark roles.
+- axe does NOT catch: meaningful alt text (it accepts `alt=""` as valid), correct heading hierarchy (ordering only, not semantic structure), focus order, screen-reader announcement quality, dynamic content updates.
 
-What it catches: missing alt text, missing form labels, duplicate ids, ARIA mismatches, contrast under 4.5:1 (when not disabled), `<html>` without `lang`, headings out of order, missing landmark roles. About 30 percent of WCAG can be detected mechanically; this is that 30 percent.
+Second-opinion gates:
 
-What it does not catch: meaningful alt text (axe accepts `alt=""` as valid), correct heading hierarchy (axe checks ordering, not semantic structure), focus order, screen-reader announcement quality, dynamic content updates.
+- pa11y-ci: `pa11y-ci --sitemap https://<host>/sitemap.xml --threshold 0` runs HTML_CodeSniffer against a sitemap (different rule set than axe, high but partial overlap).
+- Lighthouse a11y: `lhci autorun --collect.url=https://<staging-host>` catches contrast in computed styles after JS runs. Require `categories:accessibility:score >= 0.95` (target 1.0).
 
-Check: every route has an axe test that asserts zero violations. Disabled rules are enumerated in a config file with a comment per rule. Manual axe in DevTools is part of the pre-launch checklist (`pre-launch.md`).
-
-### pa11y-ci
-
-```bash
-pa11y-ci --sitemap https://your-domain.example/sitemap.xml --threshold 0
-```
-
-Runs HTML_CodeSniffer (the same engine as the older WAVE tool) against a sitemap. Different rule set than axe; the overlap is high but not total. Add as a second-opinion gate when the site has strict accessibility requirements.
-
-### Lighthouse a11y as a CI gate
-
-```bash
-lhci autorun --collect.url=https://staging.your-domain.example
-```
-
-With assertions configured to require `categories:accessibility:score >= 0.95` (target 1.0). Catches some violations the others miss (contrast in computed styles after JS runs).
-
-Check: at least two a11y tools run in CI (axe plus one of pa11y or Lighthouse). All assert zero violations or a documented baseline that decreases over time, never increases.
+Check: every route has an axe test asserting zero violations; disabled rules are enumerated in a config file with a comment per rule; manual axe in DevTools is in the pre-launch checklist (see pre-launch.md). At least two a11y tools run in CI (axe plus pa11y or Lighthouse), all asserting zero violations or a documented baseline that only decreases over time, never increases.
 
 ## Performance Budgets in CI
 
-A performance budget is a number, asserted on every PR, that fails the merge if the bundle exceeds it. Without a budget, every PR is one regression closer to a slow site.
+A performance budget is a number asserted on every PR that fails the merge when exceeded. Without it, every PR is one regression closer to a slow site.
 
-### size-limit (JS / CSS gzipped)
+JS/CSS gzipped budget (size-limit). Block merge when exceeded; PR comment shows current vs limit vs delta; use `--why` to name the dependency that pushed it over.
 
 ```json
 {
@@ -155,15 +117,7 @@ A performance budget is a number, asserted on every PR, that fails the merge if 
 }
 ```
 
-Run as a CI job. PR comment shows current vs limit vs delta. Block merge when limit is exceeded.
-
-Strengths: simple, mature, integrates with most bundlers, supports the `--why` flag that names the dependency that pushed the bundle over.
-
-Limitations: file-pattern based. If your route splits change names, the patterns need updating.
-
-### bundlesize (the newer, route-aware variant)
-
-For route-based code splitting, bundle the per-route chunks separately and assert per-route budgets:
+Per-route budget (bundlesize). Stricter than total-app budgets; catches a heavy library imported on a route that did not need it:
 
 ```json
 {
@@ -175,61 +129,41 @@ For route-based code splitting, bundle the per-route chunks separately and asser
 }
 ```
 
-Route-level budgets are stricter than total-app budgets and catch a different regression: a heavy library imported on a route that did not need it.
+| Budget | Limit (gzipped) | Tool |
+|--------|-----------------|------|
+| Main index JS | 90 KB | size-limit |
+| Main index CSS | 20 KB | size-limit |
+| Vendor JS | 120 KB | size-limit |
+| Per-route home chunk | 60 KB | bundlesize |
+| Per-route product chunk | 80 KB | bundlesize |
+| Per-route checkout chunk | 100 KB | bundlesize |
 
-### INP CrUX gate via PageSpeed Insights API
-
-Lab budgets miss field INP regressions. A CI job that queries CrUX p75 INP for the production origin, compares to a baseline, and fails the deploy on a regression of more than 50ms is the field-side gate:
+Field-INP gate (lab budgets miss field INP). Query CrUX p75 INP for the production origin, compare to baseline, and fail the deploy on a regression of more than 50ms. Gates on the rolling 28-day CrUX p75: the signal lags 28 days but is the only field-INP gate that needs no private RUM pipeline:
 
 ```bash
-curl -s "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://your-domain.example&strategy=mobile&key=$PSI_KEY" \
+curl -s "https://<crux-api-host>/runPagespeed?url=https://<origin>&strategy=mobile&key=$PSI_KEY" \
   | jq -e '.loadingExperience.metrics.INTERACTION_TO_NEXT_PAINT_MS.percentile <= 200'
 ```
 
-This gates on the rolling 28-day CrUX p75. The signal lags (28-day window) but it is the only field-INP gate that does not require a private RUM pipeline.
+Check: CI has at least one bundle-size gate (size-limit or bundlesize) and at least one field-perf gate (CrUX query); budgets are defined per route, not just per app; budget changes are reviewed in PRs.
 
-Check: CI has at least one bundle-size gate (size-limit or bundlesize) and at least one field-perf gate (CrUX query). Budgets are defined per route, not just per app. Budget changes are reviewed in PRs.
+## Type-Only and Lint Gates
 
-## Type-Only Check Gates
+Static analysis catches regressions runtime tests miss. Run each as a separate CI job for faster feedback than the bundler.
 
-Static analysis catches a class of regressions that runtime tests miss.
+- Type check: `npx tsc --noEmit --project tsconfig.json` type-checks every file without output; assert zero errors. tsconfig has `strict: true`.
+- Strict flags worth enabling, each catching a real bug class: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`. Turn on new strict flags one at a time with a clean-up PR per flag.
+- Lint beyond types: `npx biome check src/` or `npx eslint --max-warnings 0 src/` treats warnings as errors, catching dead code, hooks-rules violations, accessibility lint, framework-specific traps, import-cycle warnings.
 
-### tsc --noEmit
-
-```bash
-npx tsc --noEmit --project tsconfig.json
-```
-
-Type-checks every file in the project without producing output. Run as a separate CI job (faster feedback than the bundler), assert zero errors.
-
-Strict mode flags worth turning on: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`. Each catches a class of real bug.
-
-Check: `tsc --noEmit` runs in CI. The project's `tsconfig.json` has `strict: true`. New strict flags are turned on one at a time with a clean-up PR per flag.
-
-### Biome / ESLint
-
-Static analysis beyond types. Catches dead code, hooks-rules violations, accessibility lint, react-specific traps, import-cycle warnings.
-
-```bash
-npx biome check src/
-# or
-npx eslint --max-warnings 0 src/
-```
-
-Run with `--max-warnings 0` so warnings are treated as errors. New warnings tracked to closure within the sprint they appear.
-
-Check: lint runs in CI. Warnings count is monitored and trends down over time. Ignored rules are enumerated in the config with a comment per rule.
+Check: type check and lint run in CI; warnings count is monitored and trends down; ignored rules are enumerated in the config with a comment per rule.
 
 ## Contract Tests
 
-The contract between frontend and backend is a recurring source of regressions. Two patterns help.
+The frontend-backend contract is a recurring regression source. Two patterns.
 
-### Pact (consumer-driven contracts)
-
-The frontend (consumer) writes a contract describing the requests it makes and the responses it expects. The backend (provider) verifies the contract against its own implementation in its own CI. Both sides publish to a shared broker.
+Consumer-driven contract: the consumer writes the requests it makes and responses it expects; the provider verifies that contract against its own implementation in its own CI; both publish to a shared broker. When the backend renames a field without updating the contract, its CI fails, so the frontend learns at PR time not deploy time. Requires the backend to run verification in their CI.
 
 ```js
-// Consumer side (frontend test)
 provider.addInteraction({
   state: 'a user exists',
   uponReceiving: 'a request for the user profile',
@@ -241,15 +175,7 @@ provider.addInteraction({
 });
 ```
 
-When the backend changes a field name without updating the contract, the backend's CI fails. The frontend learns about the breakage at PR time, not at deploy time.
-
-Strengths: catches schema drift deterministically, no shared mock to maintain.
-
-Weaknesses: requires coordination with the backend team (they must run Pact verification in their CI).
-
-### Schema validation on responses
-
-A lower-coordination alternative: the frontend declares the response schema (Zod, Valibot, JSON Schema, OpenAPI) and validates every response at runtime in development. Failures log to the error tracker.
+Runtime schema validation (lower coordination): declare the response schema (Zod, Valibot, JSON Schema, OpenAPI), validate every response in development, log failures to the error tracker. Catches schema drift in production with attribution:
 
 ```js
 const UserSchema = z.object({
@@ -263,15 +189,13 @@ const parsed = UserSchema.safeParse(await response.json());
 if (!parsed.success) reportError({ type: 'schema-mismatch', issues: parsed.error.issues });
 ```
 
-Catches schema drift in production with attribution. Lower discipline than Pact, lower coordination cost.
+Check: every consumed API endpoint has either a consumer-driven contract or a runtime schema validation; schema mismatches in production trip an alert (see observability.md).
 
-Check: every consumed API endpoint has either a Pact contract or a runtime schema validation. Schema mismatches in production trip an alert (see observability.md).
+## lighthouse-ci Wiring
 
-## lighthouse-ci GitHub Action Wiring
+The highest-leverage perf gate. Wire it into the PR loop so a regression blocks the merge.
 
-Lighthouse-ci is the highest-leverage perf gate. Wire it into the PR loop so a regression blocks the merge.
-
-### The action snippet
+CI job (run on pull_request after dependency install and build):
 
 ```yaml
 name: lighthouse-ci
@@ -280,32 +204,30 @@ jobs:
   lhci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: <checkout-step>
+      - uses: <setup-node-step>
         with:
           node-version: '20'
       - run: npm ci
       - run: npm run build
       - name: run lhci
-        uses: treosh/lighthouse-ci-action@v12
+        uses: <lighthouse-ci-action>
         with:
           urls: |
-            https://staging.your-domain.example/
-            https://staging.your-domain.example/product
-            https://staging.your-domain.example/checkout
+            https://<staging-host>/
+            https://<staging-host>/product
+            https://<staging-host>/checkout
           uploadArtifacts: true
           temporaryPublicStorage: true
           configPath: ./lighthouserc.json
 ```
 
-The settings that matter:
+- `urls`: one per representative surface, covering home, a content route, and a flow-critical route (checkout, sign-up).
+- `uploadArtifacts: true` saves the raw Lighthouse JSON as a build artefact (failures reproducible in review).
+- `temporaryPublicStorage: true` posts a public-viewer URL in the PR comment.
+- `configPath` points to the assertion config below.
 
-1. **`urls`.** One per representative surface. Cover home, a content route, and a flow-critical route (checkout, sign-up).
-2. **`uploadArtifacts: true`.** Saves the raw Lighthouse JSON as a build artefact. Failures are reproducible in the PR review.
-3. **`temporaryPublicStorage: true`.** Posts a public-viewer URL to the PR comment. Reviewer clicks the link and sees the full Lighthouse report.
-4. **`configPath`.** The assertion config (see below).
-
-### The assertion config
+Assertion config. `numberOfRuns: 5` reduces flake; the action reports the median:
 
 ```json
 {
@@ -329,11 +251,7 @@ The settings that matter:
 }
 ```
 
-`numberOfRuns: 5` reduces flake; the action reports the median. Adjust the thresholds to your surface; the values above are sensible defaults for a modern marketing or product site.
-
-### PR comment integration
-
-The action posts a comment with score deltas:
+The action posts a per-surface score-delta comment so the reviewer sees the trend and fixes regressions in the same PR:
 
 ```text
 Lighthouse scores
@@ -346,44 +264,22 @@ Lighthouse scores
 | SEO           | 100 (=) | 100 (=) | 100 (=) |
 ```
 
-Reviewer sees the trend at a glance. Regressions get fixed in the same PR.
+Check: every PR shows the Lighthouse summary as a comment within 5 minutes of the build completing; score regressions block the merge; the public-viewer URL is opened during PR review.
 
-Check: every PR shows the Lighthouse summary as a comment within 5 minutes of the build completing. Score regressions block the merge. The action's public-viewer URL is opened during PR review.
+## CI realism for a perfect-score pipeline
+
+Keeping the gate green in a real runner needs three discipline rules. The gate must stay hermetic, the variable metric must be floored not pinned, and gates split by feedback cost.
+
+- Hermetic gate (T1-D): when a Lighthouse CI gate runs against a local preview server, do NOT let a self-injected third-party tag into that build, or the gate starts depending on the external network and fails in a locked-down runner. Emit such tags only in the real deploy build (gate the tag on a deploy-only env var). The audit gate stays hermetic; production still gets the tag.
+- Performance is the variable category (T3-J): on a shared CI runner (often 2 vCPU) the mobile preset 4x CPU throttle competes for the same cores, depressing and destabilizing Performance, while A11y, Best Practices, and SEO are deterministic. Gate Performance at a floor (e.g. `minScore` 0.9) while holding the other three at 1.0. Do not run more Lighthouse workers than the runner has cores; get wall-clock parallelism from a sliced-URL matrix across separate runners, not many workers on one box.
+- Split gates by feedback cost (T3-K): fast deterministic gates (format, lint, type, unit) run per PR; slow gates (full LHCI, visual regression, end-to-end) run on pre-push and on-merge, not on every PR push.
 
 ## Testing vs Audit Workflow
 
-Two complementary disciplines, often conflated.
+Two complementary disciplines, often conflated. Run both: tests are the gate, the audit loop is the polish.
 
-### Testing: the pre-merge gate
-
-Testing answers "does this change break what already works?". Runs in CI on every PR. Output is binary: pass or fail. Fast feedback (minutes). Drives the merge decision.
-
-What testing catches:
-
-- Logic regression (unit, integration)
-- Style drift (visual)
-- Surface flow break (end-to-end)
-- Accessibility violation (axe, Lighthouse a11y)
-- Performance budget breach (size-limit, Lighthouse perf assertion)
-- Schema drift (contract)
-
-### Audit workflow: the post-build polish loop
-
-Audit-workflow (`audit-workflow.md`) answers "is the deploy actually as good as we want it to be?". Runs on a staging or production deploy, route by route. Output is a list of findings with severity and owner. Slower feedback (hours). Drives the polish backlog.
-
-What audit catches:
-
-- Visual quality regressions invisible to fixed-viewport snapshots (real device rendering, real OS font stacks)
-- Real-world performance regressions invisible to lab Lighthouse (real network, real device CPU)
-- Accessibility issues only a human screen-reader run can catch (meaningful alt text, correct heading semantics)
-- SEO drift (canonical drift, broken structured data, sitemap freshness)
-- Cross-browser quirks (Firefox-only, Safari-only)
-- Brand polish (motion timing, copy tone, illustration consistency)
-
-### The split
-
-| Property | Testing | Audit |
-|----------|---------|-------|
+| Property | Testing (pre-merge gate) | Audit (post-build polish loop) |
+|----------|--------------------------|--------------------------------|
 | When | Every PR | Per deploy or per cadence |
 | Output | Pass / fail | Findings list |
 | Feedback | Minutes | Hours |
@@ -391,13 +287,16 @@ What audit catches:
 | Decision | Block merge | Schedule polish work |
 | Coverage | Mechanical | Includes judgement |
 
-Run both. Pre-merge tests are the gate. Audit-workflow is the polish loop. Neither replaces the other. A site with comprehensive tests and no audits ships mechanically correct code that looks shabby. A site with audits and no tests ships polished code that regresses every release.
+- Testing catches: logic regression (unit, integration), style drift (visual), surface-flow break (end-to-end), accessibility violation (axe, Lighthouse a11y), performance-budget breach (size-limit, Lighthouse perf assertion), schema drift (contract).
+- Audit catches what fixed-viewport snapshots and lab Lighthouse cannot: real-device rendering and OS font stacks, real-network/real-CPU performance, human screen-reader findings (meaningful alt text, heading semantics), SEO drift (canonical drift, broken structured data, sitemap freshness), cross-browser quirks (Firefox-only, Safari-only), brand polish (motion timing, copy tone, illustration consistency).
 
-Check: the team's release process documents both gates. Tests are mandatory; audits are scheduled. Audit findings feed into the next sprint as issues, not into emergency hotfixes.
+A site with tests and no audits ships mechanically correct code that looks shabby; a site with audits and no tests ships polished code that regresses every release.
 
-## See also
+Check: the release process documents both gates (tests mandatory, audits scheduled); audit findings feed the next sprint as issues, not emergency hotfixes (see audit-workflow.md).
 
-- [lighthouse.md](lighthouse.md) for the audit row mapping that the Lighthouse-ci assertions reference
-- [observability.md](observability.md) for the post-deploy field-data signals that complement pre-merge tests
-- [pre-launch.md](pre-launch.md) for the evidence manifest that consumes the CI artefacts
-- [audit-workflow.md](audit-workflow.md) for the post-build polish loop that complements pre-merge gates
+## See Also
+
+- [lighthouse.md](lighthouse.md): the audit-row mapping the lighthouse-ci assertions reference
+- [observability.md](observability.md): post-deploy field signals that complement pre-merge tests
+- [pre-launch.md](pre-launch.md): the evidence manifest that consumes the CI artefacts
+- [audit-workflow.md](audit-workflow.md): the post-build polish loop these gates complement
