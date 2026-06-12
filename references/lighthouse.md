@@ -202,8 +202,8 @@ A change to HOW CSS is delivered (inlining, bundling, chunk/concat order, a buil
 | Client false positive | An ad/privacy/DNS blocker in the audit profile blocks it: `net::ERR_BLOCKED_BY_CLIENT` | Production is fine |
 | Real ships-to-everyone bug | An edge platform auto-injects the third-party tag with a pinned SRI `integrity` hash + `crossorigin`; SRI on a cross-origin script forces CORS-mode fetch. When the vendor rolls the asset forward, the pinned hash/version goes stale and the load fails with `net::ERR_FAILED` / no `Access-Control-Allow-Origin`, tripping `errors-in-console` for every visitor | Breaks for all |
 
-- Discriminator: reproduce in a clean headless run. If it vanishes, it was the client.
-- Fix the real one by self-injecting the plain vendor tag (no `integrity`, no `crossorigin`, no pinned version) so it loads no-cors.
+- Discriminator: reproduce in a clean headless run. If it vanishes, it was the client. If it reproduces every run, inspect the rendered DOM for an `integrity` + `crossorigin` pair on an auto-injected third-party script. A direct fetch of the asset (`curl -I`) still returns a valid `Access-Control-Allow-Origin`, so a header-only check passes and misses it: the failure is the stale pinned hash under CORS-mode page load, not a missing CDN header.
+- Fix the real one by self-injecting the plain vendor tag (no `integrity`, no `crossorigin`, no pinned version) so it loads no-cors. Most edge auto-injectors skip injection when the tag is already present, so the plain self-injected tag pre-empts the broken pinned one.
 
 #### CSP and framework hydration
 

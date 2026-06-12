@@ -511,7 +511,7 @@ For YMYL (Your Money Your Life) topics (medical, legal, financial), expertise an
 Crawlers (search and AI) index what is in the HTML response. Text that appears only after client-side hydration (inside an island, a partial-hydration region, or any JS-only render) may never be indexed and is invisible to crawlers that do not execute JS.
 
 - Server-render (SSR or SSG) all primary content and any text inside interactive components, then hydrate for interactivity.
-- For tabbed content (for example terms and privacy panels), server-render every panel's content in static HTML so all of it is indexable, then enhance into tabs.
+- For tabbed content (for example terms and privacy panels), server-render every panel's content in static HTML so all of it is indexable, then enhance into tabs (roving tabindex, a deep-linkable active tab; see accessibility.md Tabs).
 - Verify by viewing source (not the DevTools DOM, which shows post-JS state) or by loading with JavaScript disabled. Every load-bearing sentence, price, and heading must be present.
 - A partially-hydrated widget rendering only its active state in static HTML (for example a toggle showing one of three values) is acceptable for the visible state, but put the full set of facts somewhere server-rendered (a static list, an `sr-only` block, or the structured data and prose).
 

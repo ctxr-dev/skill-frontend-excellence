@@ -360,3 +360,4 @@ Not bundle hygiene proper, but it breaks builds:
 - [security.md](security.md): Subresource Integrity, supply-chain, and dependency vulnerability gates.
 - [observability.md](observability.md): hidden source-map upload and the error-tracking pipeline that depends on it.
 - [testing.md](testing.md): `size-limit`, `bundlesize`, lighthouse-ci, and the CI checks that make budgets auditable.
+- [seo.md](seo.md): the clean-URL contract (flat-file build output and the static-host audit gotcha).

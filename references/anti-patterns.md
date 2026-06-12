@@ -44,7 +44,7 @@ Search by symptom (the column you scan first) or by category (the section headin
 | Render a long list without virtualization | Main thread chokes on 10000 nodes | Virtualize with intersection observers or a windowed renderer | [performance.md](performance.md) |
 | `setTimeout` in a render path to defer expensive work | Hides the cost; INP regresses | Schedule via `scheduler.yield` or move to a worker | [performance.md](performance.md) |
 | CSS-delivery change shipped without a full-site axe re-run | Inlining, bundling, or reordering can flip a computed color via cascade source order with no authored-rule change | After any css-delivery change, re-run axe on every route and eyeball both audit viewports | [lighthouse.md](lighthouse.md), [testing.md](testing.md) |
-| Third-party beacon auto-injected with a pinned SRI integrity hash plus crossorigin | When the vendor rolls the asset forward the pinned hash goes stale, the CORS-mode fetch fails, and errors-in-console fires for every visitor | Self-inject the plain vendor tag (no integrity, no crossorigin, no pinned version) so it loads no-cors | [debug-recipes.md](debug-recipes.md), [lighthouse.md](lighthouse.md) |
+| Third-party beacon auto-injected with a pinned SRI integrity hash plus crossorigin | When the vendor rolls the asset forward the pinned hash goes stale, the CORS-mode fetch fails, and errors-in-console fires for every visitor | Self-inject the plain vendor tag (no integrity, no crossorigin, no pinned version) so it loads no-cors; edge auto-injectors skip injection when the tag is already present, so the plain tag pre-empts the broken pinned one | [debug-recipes.md](debug-recipes.md), [lighthouse.md](lighthouse.md) |
 
 ## Accessibility
 
