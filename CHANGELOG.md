@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-13
+
 ### Changed
 
 - Sharpened the `errors-in-console` third-party-beacon coverage in `lighthouse.md`: the discriminator now names the DOM-inspection confirm step (look for an `integrity` + `crossorigin` pair on an auto-injected third-party script) and the header false-negative trap (a direct `curl -I` of the asset still returns a valid `Access-Control-Allow-Origin`, so a header-only check passes and misses the stale-hash-under-CORS failure), and the fix now states the why (edge auto-injectors skip injection when the tag is already present, so the plain self-injected tag pre-empts the broken pinned one). Mirrored the mechanism into the `anti-patterns.md` beacon row and reconciled the `debug-recipes.md` Hypothesis B fix with this canonical self-inject path.
