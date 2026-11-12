@@ -218,7 +218,8 @@ Composition:
 - [ ] HTTPS, no mixed content
 - [ ] No render-blocking content critical to indexing
 - [ ] Content-and-markup sweep over built HTML returns clean: one H1 per page, title and description in range (rendered length), self-referencing canonical, OG tags, every JSON-LD parseable, every image has alt, no duplicate ids, no orphan pages (except an error page)
-- [ ] If AI discovery matters: `llms.txt` exists and is complete, robots.txt does not block major AI crawlers (and any dedicated user-agent group repeats all disallows), load-bearing facts are server-rendered
+- [ ] If AI discovery matters: `llms.txt` exists and is complete with every entry a Markdown link `[Title](https://absolute-url)` (one H1, a `>` summary, H2 sections, no bare-URL items), robots.txt does not block major AI crawlers (and any dedicated user-agent group repeats all disallows), load-bearing facts are server-rendered
+- [ ] Agentic browsing: `npx lighthouse@13 <url> --only-categories=agentic-browsing --output=json --output-path=/tmp/lh-agent.json --chrome-flags="--headless=new"` against the built or live origin; the `llms-txt` audit is score 1 or not applicable (a failure is blocking), and report the category fraction plus any failing audit id
 
 ## 10. State Coverage
 
