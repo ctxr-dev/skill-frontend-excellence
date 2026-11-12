@@ -104,7 +104,7 @@ For sites where images or video are first-class content (gallery, recipe, produc
 
 Generative search is a real discovery and citation surface. Make the site quotable, not just rankable.
 
-- Publish `/llms.txt`: a short overview of the site plus a flat index of canonical pages (title and URL per line).
+- Publish `/llms.txt` in the [llmstxt.org](https://llmstxt.org) format at the origin root: one H1 with the site name, a `>` summary, then H2 sections that index the canonical pages. Write every entry as a Markdown link with an absolute URL, `- [Page title](https://your-domain.com/page): one-line note`. Never write `- Page title: https://...` or a bare URL per line: the Lighthouse `llms-txt` audit (Agentic Browsing category, `core/audits/agentic/llms-txt.js`) passes only when the file has an H1, at least one Markdown link (`[text](url)`), and at least 50 characters, so a file of bare URLs fails with "File does not appear to contain any links". A 404 is "not applicable" (the file is optional), but a 5xx or 429 fails.
 - Optionally publish `/llms-full.txt`: the load-bearing facts an answer engine quotes verbatim (what the product does, numbers, pricing, data model), in plain prose, consistent with rendered pages and structured data.
 - Ensure major AI crawler user-agents are NOT blocked in `robots.txt` and that `robots.txt` references the sitemap.
 - Precedence: a named user-agent group fully REPLACES the `*` group for that agent (rules do not merge), so a dedicated AI group must REPEAT every `Disallow` you still want enforced. A blanket `Allow: /` in a named group silently exposes the `/api/` or `/private/` paths the `*` group disallows. Add a dedicated group only to set DIFFERENT rules than `*`.
@@ -126,7 +126,7 @@ Allow: /
 Sitemap: https://example.com/sitemap.xml
 ```
 
-The AEO check: `llms.txt` exists and lists every canonical page; `robots.txt` does not block AI user-agents and references the sitemap; facts an engine would quote appear in server-rendered HTML, not only in images or JS.
+The AEO check: `llms.txt` exists and lists every canonical page as a `[Title](absolute-url)` entry; running `npx lighthouse@13 <url> --only-categories=agentic-browsing` reports the `llms-txt` audit as score 1 or not applicable (the category reports a fraction of passing audits, not a 0 to 100 score, and needs Chrome 150 or later); `robots.txt` does not block AI user-agents and references the sitemap; facts an engine would quote appear in server-rendered HTML, not only in images or JS.
 
 ### Canonical Tag
 

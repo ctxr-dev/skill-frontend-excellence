@@ -50,7 +50,7 @@ A condensed view. Each rule is one dense line: principle, concrete check, thresh
 - Internal linking with descriptive anchor text: no "click here", no orphan pages.
 - robots: index, follow on indexable pages, noindex on private, search-result, or duplicate pages.
 - XML sitemap lists only canonical, indexable, 200-status URLs, referenced from robots.txt.
-- AI answer-engine readiness: ship an llms.txt page index (and optionally an llms-full.txt of quotable facts), ensure AI crawler user-agents are not blocked in robots.txt (a dedicated named group is needed only when it repeats your disallows, since it replaces the * group), and keep load-bearing facts in server-rendered text because generative search reads and cites the rendered HTML and valid structured data, not images or client-only JS.
+- AI answer-engine readiness: ship an llms.txt page index with every entry a Markdown link, `- [Title](https://absolute-url): note` (a bare-URL entry fails the Lighthouse `llms-txt` audit, which needs one H1, at least one Markdown link, and 50+ characters), optionally an llms-full.txt of quotable facts, ensure AI crawler user-agents are not blocked in robots.txt (a dedicated named group is needed only when it repeats your disallows, since it replaces the * group), and keep load-bearing facts in server-rendered text because generative search reads and cites the rendered HTML and valid structured data, not images or client-only JS.
 - Never fabricate structured data: emit aggregateRating, review, sameAs, and SearchAction only when each is backed by something real (real reviews, real profiles, a working search endpoint), and every JSON-LD value must be derivable from visible content.
 
 ## UI/UX (the levers that move perceived quality)

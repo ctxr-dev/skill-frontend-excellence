@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- `llms.txt` guidance now follows llmstxt.org: every list item is a Markdown link `- [Title](https://absolute-url): note` instead of "title and URL per line". Updated in `seo.md`, `quick-reference.md` and `pre-launch.md`.
+- Added the Lighthouse Agentic Browsing check (`npx lighthouse@13 <url> --only-categories=agentic-browsing`). The `llms-txt` audit (`core/audits/agentic/llms-txt.js`) passes only with one H1, at least one Markdown link and 50+ characters. Added to `seo.md` and the `pre-launch.md` SEO gate.
+
 ## [0.3.1] - 2026-06-13
 
 ### Changed
